@@ -44,12 +44,20 @@ NAN_METHOD(Player::New)
 
 NAN_METHOD(Player::loadURL)
 {
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
     if (info.Length() > 0)
     {
         if (info[0]->IsString())
         {
-            String::Utf8Value str(info[0]->ToString());
-            printf("PLAYER INITIALIZED");
+            try
+            {
+                v8::String::Utf8Value param1(info[0]->ToString());
+                obj->nativePlayer = new NativePlayer(std::string(*param1));
+            }
+            catch(std::runtime_error ex)
+            {
+                return Nan::ThrowError(Nan::New(ex.what()).ToLocalChecked());
+            }
         }
         else
         {

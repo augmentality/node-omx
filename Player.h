@@ -1,6 +1,8 @@
 #pragma once
 
 #include <nan.h>
+#include "libomx/NativePlayer.h"
+#include <stdexcept>
 
 class Player : public Nan::ObjectWrap
 {
@@ -8,6 +10,8 @@ class Player : public Nan::ObjectWrap
         static NAN_MODULE_INIT(Init);
 
     private:
+
+        NativePlayer * nativePlayer = nullptr;
         explicit Player();
         ~Player();
         static NAN_METHOD(New);

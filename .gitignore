@@ -2,4 +2,6 @@
 .idea/usage.statistics.xml
 .idea/tasks.xml
 /node_modules
+/cmake-build-debug
+/cmake-build-release
 build/
