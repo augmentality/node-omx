@@ -80,15 +80,6 @@ void VideoThread::videoThreadFunc()
         {
             uint64_t timestamp = (uint64_t)(
                     block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-            /*
-            if (block->looped)
-            {
-                baseTime += lastTime;
-                printf("VIDEO LOOPED: Base time is %f\n", (double)baseTime / DVD_TIME_BASE);
-            }
-            lastTime = timestamp + block->duration;
-            timestamp += baseTime;
-            */
 
             int readBytes = 0;
             int pSize = block->dataSize;
@@ -185,6 +176,15 @@ VideoThread::~VideoThread()
 {
     this->playbackComplete = true;
     this->videoThread.join();
+
+    // Empty queue
+    while(videoQueue.size() > 0)
+    {
+        VideoBlock * b = videoQueue.front();
+        videoQueue.pop();
+        delete[] b->data;
+        delete b;
+    }
 
     if (this->decodeTunnel != nullptr)
     {

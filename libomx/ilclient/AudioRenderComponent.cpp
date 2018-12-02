@@ -62,8 +62,6 @@ void AudioRenderComponent::setPCMMode(int sampleRate, int channelCount, AVSample
     pcm.bInterleaved = (planar) ? OMX_FALSE : OMX_TRUE;
     pcm.nBitPerSample = bitDepth;
     pcm.ePCMMode = OMX_AUDIO_PCMModeLinear;
-    printf("CHANNELS: %d, SAMPLERATE: %d, INTERLEAVED: %d, BITSPERSAMPLE: %d, SIGNED: %b\n", pcm.nChannels, pcm.nSamplingRate, pcm.bInterleaved, pcm.nBitPerSample, bitSigned);
-    fflush(stdout);
     switch(channelCount)
     {
         case 1:

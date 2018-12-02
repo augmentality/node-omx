@@ -17,12 +17,14 @@ class ILComponent
         int disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferList, ILCLIENT_FREE_T ilclient_free, void *priv);
         OMX_ERRORTYPE  setOMXParameter(OMX_INDEXTYPE paramName, void * param);
         OMX_ERRORTYPE  getOMXParameter(OMX_INDEXTYPE paramName, void * param);
+        OMX_ERRORTYPE  getOMXConfig(OMX_INDEXTYPE paramName, void * param);
         OMX_ERRORTYPE  setOMXConfig(OMX_INDEXTYPE configName, void * param);
         COMPONENT_T * getComp();
         OMX_BUFFERHEADERTYPE * getInputBuffer(int portIndex, int block);
         int removeEvent(OMX_EVENTTYPE eEvent, OMX_U32 nData1, int ignore1, OMX_IN OMX_U32 nData2, int ignore2);
         int waitForEvent(OMX_EVENTTYPE event, OMX_U32 nData1, int ignore1, OMX_IN OMX_U32 nData2, int ignore2, int event_flag, int suspend);
         OMX_ERRORTYPE emptyBuffer(OMX_BUFFERHEADERTYPE *buf);
+        int waitForCommandComplete(OMX_COMMANDTYPE command, OMX_U32 nData2);
 
     private:
         ILClient * client = nullptr;
@@ -66,7 +68,6 @@ class ILComponent
         OMX_ERRORTYPE handleFillBufferDoneError(OMX_OUT OMX_HANDLETYPE hComponent, OMX_OUT OMX_BUFFERHEADERTYPE* pBuffer);
 
         void disablePort(int portIndex);
-        int waitForCommandComplete(OMX_COMMANDTYPE command, OMX_U32 nData2);
         int waitForCommandCompleteDual(OMX_COMMANDTYPE command, OMX_U32 nData2, COMPONENT_T *other);
         int enableTunnel(ILTunnel * tunnel);
         int disableTunnel(ILTunnel * tunnel);

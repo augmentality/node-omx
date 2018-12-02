@@ -46,15 +46,42 @@ NativePlayer::NativePlayer(std::string url)
 }
 void NativePlayer::play()
 {
-    if (this->audioThread != nullptr)
+    if (playState == 2)
     {
-        this->audioThread->start();
+        clock->changeState(OMX_StateExecuting);
+        this->setSpeed(playSpeed);
+        playState = 1;
     }
-    if (this->videoThread != nullptr)
+    else if (playState == 0)
     {
-        this->videoThread->start();
+        if (this->audioThread != nullptr)
+        {
+            this->audioThread->start();
+        }
+        if (this->videoThread != nullptr)
+        {
+            this->videoThread->start();
+        }
+        playThread = std::thread(&NativePlayer::playThreadFunc, this);
     }
-    playThread = std::thread(&NativePlayer::playThreadFunc, this);
+}
+void NativePlayer::pause()
+{
+    if (playState == 1)
+    {
+        playState = 2;
+        this->clock->setTimeScale(0.0f);
+        clock->changeState(OMX_StateIdle);
+    }
+}
+void NativePlayer::setSpeed(float scale)
+{
+    playSpeed = scale;
+    this->clock->setTimeScale(scale);
+}
+double NativePlayer::getTime()
+{
+    return clock->getTime();
 }
 PrebufferBlock * NativePlayer::getNextBlock(bool fromPrebuffer)
 {

@@ -1,5 +1,5 @@
 #pragma once
-
+#include "ilc.h"
 class ILComponent;
 
 struct ILTunnel
@@ -8,4 +8,6 @@ struct ILTunnel
     int sourcePort;
     ILComponent * sinkComponent;
     int sinkPort;
+
+    ~ILTunnel();
 };

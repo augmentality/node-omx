@@ -20,8 +20,6 @@ public:
     void addData(AudioBlock * block);
 
 private:
-    uint64_t baseTime = 0;
-    uint64_t lastTime = 0;
 
     bool playbackComplete = false;
 

@@ -10,14 +10,34 @@ int main (int argc, char **argv)
     int delay = 5;
     do
     {
-        printf("Starting in %d", delay);
+        printf("Starting in %d\n", delay);
+        fflush(stdout);
         delay--;
+        usleep(1000000);
     }
     while(delay > 0);
 
     n->play();
-    while(1)
-    {
-        usleep(10000);
-    }
+    sleep(10);
+    printf("Pausing\n");
+    n->pause();
+    fflush(stdout);
+    sleep(5);
+    printf("Resuming\n");
+    fflush(stdout);
+    n->play();
+    sleep(5);
+    printf("Speeding up\n");
+    fflush(stdout);
+    n->setSpeed(1.1);
+    sleep(5);
+    printf("Slowing Down\n");
+    fflush(stdout);
+    n->setSpeed(0.9);
+    sleep(5);
+    printf("Stopping, cleanup");
+    fflush(stdout);
+    delete n;
+    printf("done?");
+    fflush(stdout);
 }

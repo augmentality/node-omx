@@ -920,6 +920,11 @@ OMX_ERRORTYPE ILComponent::getOMXParameter(OMX_INDEXTYPE paramIndex, void * para
     return OMX_GetParameter(this->comp->comp, paramIndex, paramStruct);
 }
 
+OMX_ERRORTYPE ILComponent::getOMXConfig(OMX_INDEXTYPE paramIndex, void * paramStruct)
+{
+    return OMX_GetConfig(this->comp->comp, paramIndex, paramStruct);
+}
+
 OMX_ERRORTYPE ILComponent::setOMXConfig(OMX_INDEXTYPE configIndex, void * configStruct)
 {
     return OMX_SetConfig(this->comp->comp, configIndex, configStruct);

@@ -33,15 +33,6 @@ void AudioThread::audioThreadFunc()
 
             uint64_t timestamp = (uint64_t)(
                     block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-            /*
-            if (block->looped)
-            {
-                baseTime += lastTime;
-                printf("AUDIO LOOPED: Base time is %f\n", (double)baseTime / DVD_TIME_BASE);
-            }
-            lastTime = timestamp + block->duration;
-            timestamp += baseTime;
-            */
 
             size_t sample_size = pSize / (block->streamCount * block->sampleCount);
 
@@ -176,6 +167,15 @@ AudioThread::~AudioThread()
 {
     this->playbackComplete = true;
     this->audioThread.join();
+
+    // Empty queue
+    while(audioQueue.size() > 0)
+    {
+        AudioBlock * b = audioQueue.front();
+        audioQueue.pop();
+        delete[] b->data;
+        delete b;
+    }
 
     if (this->clockAudioTunnel != nullptr)
     {

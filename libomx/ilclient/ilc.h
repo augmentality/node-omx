@@ -12,7 +12,11 @@ static inline OMX_TICKS ToOMXTime(int64_t pts)
     ticks.nHighPart = pts >> 32;
     return ticks;
 }
-
+static inline int64_t FromOMXTime(OMX_TICKS ticks)
+{
+    int64_t pts = ticks.nLowPart | ((uint64_t)(ticks.nHighPart) << 32);
+    return pts;
+}
 /**
  * The <DFN>ILCLIENT_T</DFN> structure encapsulates the state needed for the IL
  * Client API.  It contains a set of callback functions used to

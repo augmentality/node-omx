@@ -11,23 +11,34 @@
 
 class NativePlayer
 {
-    public:
-        NativePlayer(std::string url);
-        ~NativePlayer();
-        void play();
+public:
+    NativePlayer(std::string url);
 
+    ~NativePlayer();
 
-    private:
-        std::queue<PrebufferBlock *> prebuffer;
-        FFFrame * frame = nullptr;
-        bool playing = false;
-        void playThreadFunc();
-        PrebufferBlock * getNextBlock(bool fromPrebuffer);
-        int playState =0 ;
-        std::thread playThread;
-        FFSource * src = nullptr;
-        ILClient * client = nullptr;
-        ClockComponent * clock = nullptr;
-        VideoThread * videoThread = nullptr;
-        AudioThread * audioThread = nullptr;
+    void play();
+
+    void pause();
+
+    void setSpeed(float scale);
+
+    double getTime();
+
+private:
+    std::queue<PrebufferBlock *> prebuffer;
+    FFFrame * frame = nullptr;
+    bool playing = false;
+
+    void playThreadFunc();
+
+    PrebufferBlock * getNextBlock(bool fromPrebuffer);
+
+    int playState = 0;
+    float playSpeed = 1.0f;
+    std::thread playThread;
+    FFSource * src = nullptr;
+    ILClient * client = nullptr;
+    ClockComponent * clock = nullptr;
+    VideoThread * videoThread = nullptr;
+    AudioThread * audioThread = nullptr;
 };

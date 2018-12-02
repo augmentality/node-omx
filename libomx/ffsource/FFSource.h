@@ -211,7 +211,6 @@ class FFSource
                                 this->codecName = "omx-vc1";
                                 break;
                             default:
-                                printf("Vcodec id unknown");
                                 break;
                         }
                         break;
@@ -371,11 +370,6 @@ class FFSource
                             skipAudio = true;
                             double diffTime = diff / DVD_TIME_BASE;
                             double newDiffTime = newDiff / DVD_TIME_BASE;
-                            printf("Audio stream ahead by %f - skipping sample, new diff %f, frameduration %lld\n", diffTime, newDiffTime, this->pkt.duration);
-                        }
-                        if (diff < 0-frame->duration)
-                        {
-                            printf("Audio stream behind\n");
                         }
                     }
                     if (!skipAudio)
