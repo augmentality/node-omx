@@ -38,6 +38,11 @@ NativePlayer::NativePlayer(std::string url)
         this->videoThread = new VideoThread(this->client, this->clock, this->src);
     }
 
+    // Prebuffer some frames
+    for (int x = 0; x < 100; x++)
+    {
+        prebuffer.push(getNextBlock(false));
+    }
 }
 void NativePlayer::play()
 {
@@ -51,70 +56,156 @@ void NativePlayer::play()
     }
     playThread = std::thread(&NativePlayer::playThreadFunc, this);
 }
+PrebufferBlock * NativePlayer::getNextBlock(bool fromPrebuffer)
+{
+    if (fromPrebuffer && prebuffer.size() > 0)
+    {
+        // Empty the prebuffer first
+        PrebufferBlock * blk = prebuffer.front();
+        prebuffer.pop();
+        return blk;
+    }
+    if (frame == nullptr)
+    {
+        frame = new FFFrame();
+    }
+    if (src->getPacket(frame) < 0)
+    {
+        return nullptr;
+    }
+    if (frame->video)
+    {
+        VideoBlock * vb = new VideoBlock();
+
+        vb->dataSize = frame->pkt->size;
+        vb->data = new uint8_t[vb->dataSize];
+        vb->pts = frame->pts;
+        vb->dts = frame->dts;
+        vb->looped = frame->loopedVideo;
+        vb->duration = frame->duration;
+        if (vb->looped)
+        {
+            frame->loopedVideo = false;
+        }
+        memcpy(vb->data, frame->pkt->data, vb->dataSize);
+        PrebufferBlock * prebuf = new PrebufferBlock();
+        prebuf->video = true;
+        prebuf->block = (void *)vb;
+        return prebuf;
+    }
+    else
+    {
+        AudioBlock * ab = new AudioBlock();
+
+        int num_streams = 0;
+        while (num_streams < AV_NUM_DATA_POINTERS &&
+               frame->frame->data[num_streams] != NULL)
+        {
+            num_streams++;
+        }
+
+        ab->audioFormat = frame->frame->format;
+        ab->dataSize = frame->convertedSize;
+        ab->sampleRate = frame->frame->sample_rate;
+        ab->streamCount = num_streams;
+        ab->channels = frame->frame->channels;
+        ab->data = new uint8_t[frame->convertedSize];
+        ab->sampleCount = frame->frame->nb_samples;
+        ab->pts = frame->pts;
+        ab->dts = frame->dts;
+        ab->looped = frame->loopedAudio;
+        ab->duration = frame->duration;
+        if (ab->looped)
+        {
+            frame->loopedAudio = false;
+        }
+        memcpy(ab->data, frame->convertedAudio, ab->dataSize);
+        PrebufferBlock * prebuf = new PrebufferBlock();
+        prebuf->video = false;
+        prebuf->block = (void *)ab;
+        return prebuf;
+    }
+}
 void NativePlayer::playThreadFunc()
 {
     clock->changeState(OMX_StateExecuting);
     playing = true;
     playState = 1;
-    FFFrame * frame = new FFFrame();
-    while(src->getPacket(frame) >= 0 && playing)
+    PrebufferBlock * block = getNextBlock(true);
+    while(block != nullptr && playing)
     {
-        if (frame->video && this->videoThread != nullptr)
+        if (block->video)
         {
-            VideoBlock * vb = new VideoBlock();
-
-            vb->dataSize = frame->pkt->size;
-            vb->data = new uint8_t[vb->dataSize];
-            vb->pts = frame->pts;
-            vb->dts = frame->dts;
-            vb->looped = frame->loopedVideo;
-            vb->duration = frame->duration;
-            if (vb->looped)
+            if (this->videoThread != nullptr)
             {
-                frame->loopedVideo = false;
+                this->videoThread->addData((VideoBlock *)block->block);
             }
-            memcpy(vb->data, frame->pkt->data, vb->dataSize);
+            else
             {
-                this->videoThread->addData(vb);
+                VideoBlock * vb = (VideoBlock *)block->block;
+                delete[] vb->data;
+                delete vb;
             }
         }
-        else if (!frame->video && this->audioThread != nullptr)
+        else
         {
-            AudioBlock * ab = new AudioBlock();
-
-            int num_streams = 0;
-            while (num_streams < AV_NUM_DATA_POINTERS &&
-                   frame->frame->data[num_streams] != NULL)
+            if (this->audioThread != nullptr)
             {
-                num_streams++;
+                this->audioThread->addData((AudioBlock *)block->block);
             }
-
-            ab->audioFormat = frame->frame->format;
-            ab->dataSize = frame->convertedSize;
-            ab->sampleRate = frame->frame->sample_rate;
-            ab->streamCount = num_streams;
-            ab->channels = frame->frame->channels;
-            ab->data = new uint8_t[frame->convertedSize];
-            ab->sampleCount = frame->frame->nb_samples;
-            ab->pts = frame->pts;
-            ab->dts = frame->dts;
-            ab->looped = frame->loopedAudio;
-            ab->duration = frame->duration;
-            if (ab->looped)
+            else
             {
-                frame->loopedAudio = false;
-            }
-            memcpy(ab->data, frame->convertedAudio, ab->dataSize);
-            {
-                this->audioThread->addData(ab);
+                AudioBlock * ab = (AudioBlock *)block->block;
+                delete[] ab->data;
+                delete ab;
             }
         }
+        delete block;
+        block = getNextBlock(true);
+    }
+    if (block != nullptr)
+    {
+        if (block->video)
+        {
+            VideoBlock * vb = (VideoBlock *)block->block;
+            delete[] vb->data;
+            delete vb;
+        }
+        else
+        {
+            AudioBlock * ab = (AudioBlock *)block->block;
+            delete[] ab->data;
+            delete ab;
+        }
+        delete block;
     }
 }
 NativePlayer::~NativePlayer()
 {
     this->playing = false;
     this->playThread.join();
+    if (frame != nullptr)
+    {
+        delete frame;
+    }
+    while (prebuffer.size() > 0)
+    {
+        PrebufferBlock * blk = prebuffer.front();
+        prebuffer.pop();
+        if (blk->video)
+        {
+            VideoBlock * vb = (VideoBlock *)blk->block;
+            delete[] vb->data;
+            delete vb;
+        }
+        else
+        {
+            AudioBlock * ab = (AudioBlock *)blk->block;
+            delete[] ab->data;
+            delete ab;
+        }
+        delete blk;
+    }
     if (this->src != nullptr)
     {
         delete this->src;

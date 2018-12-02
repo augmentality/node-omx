@@ -5,7 +5,9 @@
 #include "ilclient/ILClient.h"
 #include "VideoThread.h"
 #include "AudioThread.h"
+#include "prebufferBlock.h"
 #include <thread>
+#include <queue>
 
 class NativePlayer
 {
@@ -16,8 +18,11 @@ class NativePlayer
 
 
     private:
+        std::queue<PrebufferBlock *> prebuffer;
+        FFFrame * frame = nullptr;
         bool playing = false;
         void playThreadFunc();
+        PrebufferBlock * getNextBlock(bool fromPrebuffer);
         int playState =0 ;
         std::thread playThread;
         FFSource * src = nullptr;
