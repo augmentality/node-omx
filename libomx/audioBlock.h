@@ -11,5 +11,6 @@ struct AudioBlock
     int streamCount;
     double pts;
     double dts;
+    double duration;
     bool looped;
 };

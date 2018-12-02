@@ -1,5 +1,7 @@
 #include "VideoThread.h"
 
+#define VIDEO_QUEUE_SIZE 2000
+
 VideoThread::VideoThread(ILClient * pClient, ClockComponent * pClock, FFSource * src):
     client(pClient), clock(pClock)
 {
@@ -38,7 +40,7 @@ VideoBlock * VideoThread::dequeue()
     {
         VideoBlock * b = videoQueue.front();
         videoQueue.pop();
-        if (videoQueue.size() < 200 && !bufferReady)
+        if (videoQueue.size() < VIDEO_QUEUE_SIZE && !bufferReady)
         {
             std::unique_lock<std::mutex> lk(readyForDataMutex);
             bufferReady = true;
@@ -76,6 +78,18 @@ void VideoThread::videoThreadFunc()
         VideoBlock * block = dequeue();
         if (block != nullptr)
         {
+            uint64_t timestamp = (uint64_t)(
+                    block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
+            /*
+            if (block->looped)
+            {
+                baseTime += lastTime;
+                printf("VIDEO LOOPED: Base time is %f\n", (double)baseTime / DVD_TIME_BASE);
+            }
+            lastTime = timestamp + block->duration;
+            timestamp += baseTime;
+            */
+
             int readBytes = 0;
             int pSize = block->dataSize;
             bool error = false;
@@ -116,31 +130,22 @@ void VideoThread::videoThreadFunc()
                     {
                         buf->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
                     }
-                    else if (block->pts == DVD_NOPTS_VALUE)
+                    else
                     {
-                        buf->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                        if (block->pts == DVD_NOPTS_VALUE)
+                        {
+                            buf->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                        }
+
+
+                        if (!(buf->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN))
+                        {
+                            buf->nTimeStamp = ToOMXTime(timestamp);
+                        }
                     }
                 }
                 data_len = 0;
 
-                static uint64_t baseTime = 0;
-                static uint64_t lastTime = 0;
-
-
-                uint64_t timestamp = (uint64_t)(
-                        block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-
-                if (block->looped)
-                {
-                    baseTime += lastTime;
-                }
-                lastTime = timestamp;
-                timestamp += baseTime;
-
-                if (!(buf->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN))
-                {
-                    buf->nTimeStamp = ToOMXTime(timestamp);
-                }
                 if (vdc->emptyBuffer(buf) != OMX_ErrorNone)
                 {
                     error = true;
@@ -169,7 +174,7 @@ void VideoThread::addData(VideoBlock * vb)
     {
         std::unique_lock<std::mutex> lk(videoQueueMutex);
         videoQueue.push(vb);
-        if (videoQueue.size() > 200)
+        if (videoQueue.size() >= VIDEO_QUEUE_SIZE)
         {
             bufferReady = false;
         }

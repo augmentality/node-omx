@@ -20,4 +20,5 @@ struct FFFrame
     int convertedSize = 0;
     double pts = DVD_NOPTS_VALUE;
     double dts = DVD_NOPTS_VALUE;
+    double duration = 0;
 };

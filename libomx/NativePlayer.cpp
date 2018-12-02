@@ -18,7 +18,6 @@ NativePlayer::NativePlayer(std::string url)
     {
         this->src->hasVideo = false;
     }
-    this->hasAudio = false;
     if (!this->src->hasVideo && !this->src->hasAudio)
     {
         delete src;
@@ -69,6 +68,7 @@ void NativePlayer::playThreadFunc()
             vb->pts = frame->pts;
             vb->dts = frame->dts;
             vb->looped = frame->loopedVideo;
+            vb->duration = frame->duration;
             if (vb->looped)
             {
                 frame->loopedVideo = false;
@@ -99,6 +99,7 @@ void NativePlayer::playThreadFunc()
             ab->pts = frame->pts;
             ab->dts = frame->dts;
             ab->looped = frame->loopedAudio;
+            ab->duration = frame->duration;
             if (ab->looped)
             {
                 frame->loopedAudio = false;

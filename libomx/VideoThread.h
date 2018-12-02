@@ -22,6 +22,9 @@ public:
     void addData(VideoBlock * block);
 
 private:
+    uint64_t baseTime = 0;
+    uint64_t lastTime = 0;
+
     void videoThreadFunc();
     void waitForBuffer();
     VideoBlock * dequeue();

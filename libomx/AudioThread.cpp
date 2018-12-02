@@ -1,5 +1,7 @@
 #include "AudioThread.h"
 
+#define AUDIO_QUEUE_SIZE 2000
+
 AudioThread::AudioThread(ILClient * pClient, ClockComponent * pClock, FFSource * src):
         client(pClient), clock(pClock)
 {
@@ -29,6 +31,18 @@ void AudioThread::audioThreadFunc()
             size_t pSize = block->dataSize;
             bool error = false;
 
+            uint64_t timestamp = (uint64_t)(
+                    block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
+            /*
+            if (block->looped)
+            {
+                baseTime += lastTime;
+                printf("AUDIO LOOPED: Base time is %f\n", (double)baseTime / DVD_TIME_BASE);
+            }
+            lastTime = timestamp + block->duration;
+            timestamp += baseTime;
+            */
+
             size_t sample_size = pSize / (block->streamCount * block->sampleCount);
 
             OMX_ERRORTYPE r;
@@ -45,7 +59,22 @@ void AudioThread::audioThreadFunc()
                 if (k >= buff_header->nAllocLen)
                 {
                     // this buffer is full
+
                     buff_header->nFilledLen = k;
+
+                    if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
+                    {
+                        buff_header->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+                    }
+                    else
+                    {
+                        if (block->pts == DVD_NOPTS_VALUE)
+                        {
+                            buff_header->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                        }
+                        buff_header->nTimeStamp = ToOMXTime(timestamp);
+                    }
+
                     r = arc->emptyBuffer(buff_header);
                     if (r != OMX_ErrorNone)
                     {
@@ -59,18 +88,18 @@ void AudioThread::audioThreadFunc()
             {
                 buff_header->nFilledLen = k;
 
-                uint64_t timestamp = (uint64_t)(block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-
-                if (block->looped)
+                if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
                 {
-                    baseTime += lastTime;
+                    buff_header->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
                 }
-                lastTime = timestamp;
-                timestamp += baseTime;
-
-
-                buff_header->nTimeStamp = ToOMXTime(timestamp);
-
+                else
+                {
+                    if (block->pts == DVD_NOPTS_VALUE)
+                    {
+                        buff_header->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                    }
+                    buff_header->nTimeStamp = ToOMXTime(timestamp);
+                }
 
                 r = arc->emptyBuffer(buff_header);
                 if (r != OMX_ErrorNone)
@@ -106,7 +135,7 @@ AudioBlock * AudioThread::dequeue()
     {
         AudioBlock * b = audioQueue.front();
         audioQueue.pop();
-        if (audioQueue.size() < 200 && !bufferReady)
+        if (audioQueue.size() < AUDIO_QUEUE_SIZE && !bufferReady)
         {
             std::unique_lock<std::mutex> lk(readyForDataMutex);
             bufferReady = true;
@@ -136,7 +165,7 @@ void AudioThread::addData(AudioBlock * ab)
     {
         std::unique_lock<std::mutex> lk(audioQueueMutex);
         audioQueue.push(ab);
-        if (audioQueue.size() > 200)
+        if (audioQueue.size() >= AUDIO_QUEUE_SIZE)
         {
             bufferReady = false;
         }

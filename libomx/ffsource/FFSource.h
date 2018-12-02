@@ -24,10 +24,16 @@ class FFSource
         bool isFlipped = false;
         int width = 1920;
         int height = 1080;
-        double lastDTS = 0.0;
-        double baseDTS = 0.0;
         int sampleRate = 0;
         int channels = 0;
+        double lastVideoPTS = 0.0;
+        double lastAudioPTS = 0.0;
+        double lastVideoDTS = 0.0;
+        double lastAudioDTS = 0.0;
+        double baseVideoPTS = 0.0;
+        double baseVideoDTS = 0.0;
+        double baseAudioPTS = 0.0;
+        double baseAudioDTS = 0.0;
 
         AVBitStreamFilterContext *annexb = nullptr;
         SwrContext *swr = nullptr;
@@ -287,10 +293,18 @@ class FFSource
 
                 result = av_read_frame(this->fmt_ctx, &this->pkt);
 
-		if (result < 0)
+		        if (result < 0)
                 {
                     frame->loopedVideo = true;
                     frame->loopedAudio = true;
+
+                    baseAudioDTS += lastAudioDTS;
+                    baseVideoDTS += lastVideoDTS;
+                    baseAudioPTS += lastAudioPTS;
+                    baseVideoPTS += lastVideoPTS;
+
+
+
                     result = av_seek_frame(this->fmt_ctx, -1, 0, AVSEEK_FLAG_BACKWARD);
                     if (result < 0)
                     {
@@ -326,28 +340,14 @@ class FFSource
 
                 frame->dts = convertTimestamp(this->pkt.dts, pStream->time_base.den, pStream->time_base.num);
                 frame->pts = convertTimestamp(this->pkt.pts, pStream->time_base.den, pStream->time_base.num);
-		/*
-		printf("DTS: %f, PTS: %f\n", frame->dts, frame->pts);
-		fflush(stdout);
-
-                if (frame->dts == AV_NOPTS_VALUE && lastDTS > AV_NOPTS_VALUE)
-                {
-		    
-	 	    printf("LOOP LASTDTS. DTS: %d LAST: %d\n", frame->dts, lastDTS);
-		    fflush(stdout);
-                    baseDTS += lastDTS;
-                    lastDTS = 0;
-                    frame->dts = 0;
-                }
-                else
-                {
-                    lastDTS = frame->dts;
-                }
-                frame->dts += baseDTS;
-		*/
+                frame->duration = convertTimestamp(this->pkt.duration, pStream->time_base.den, pStream->time_base.num);
 
                 if (pkt.stream_index == this->videoStreamIdx)
                 {
+                    lastVideoPTS = frame->pts + frame->duration;
+                    lastVideoDTS = frame->dts + frame->duration;
+                    frame->pts += baseVideoPTS;
+                    frame->dts += baseVideoDTS;
 
                     int a = av_bitstream_filter_filter(annexb, this->fmt_ctx->streams[pkt.stream_index]->codec, NULL,
                                                        &pkt2.data, &pkt2.size, pkt.data, pkt.size,
@@ -359,27 +359,54 @@ class FFSource
                 }
                 else if (pkt.stream_index == this->audioStreamIdx)
                 {
-                    AVFrame *out = new AVFrame();
-                    int gotFrame = 0;
-                    avcodec_decode_audio4(this->audioCodec, out, &gotFrame, &pkt);
-                    if (gotFrame)
+                    bool skipAudio = false;
+                    if (baseAudioPTS > baseVideoPTS)
                     {
-                        int bufsize = av_samples_get_buffer_size(NULL, this->audioCodec->channels, out->nb_samples,
-                                                                 this->audioCodec->sample_fmt, 1);
-                        uint8_t *outputBuffer = new uint8_t[bufsize];
-                        swr_convert(this->swr, &outputBuffer, out->nb_samples, (const uint8_t **) out->data,
-                                    out->nb_samples);
-
-                        frame->video = false;
-                        frame->frame = out;
-                        frame->convertedSize = bufsize;
-                        frame->convertedAudio = outputBuffer;
-
-                        return result;
+                        double diff = baseAudioPTS - baseVideoPTS;
+                        if (diff > frame->duration)
+                        {
+                            baseAudioPTS -= frame->duration;
+                            baseAudioDTS -= frame->duration;
+                            double newDiff = baseAudioPTS - baseVideoPTS;
+                            skipAudio = true;
+                            double diffTime = diff / DVD_TIME_BASE;
+                            double newDiffTime = newDiff / DVD_TIME_BASE;
+                            printf("Audio stream ahead by %f - skipping sample, new diff %f, frameduration %lld\n", diffTime, newDiffTime, this->pkt.duration);
+                        }
+                        if (diff < 0-frame->duration)
+                        {
+                            printf("Audio stream behind\n");
+                        }
                     }
-                    else
+                    if (!skipAudio)
                     {
-                        delete out;
+                        lastAudioPTS = frame->pts + frame->duration;
+                        lastAudioDTS = frame->dts + frame->duration;
+                        frame->pts += baseAudioPTS;
+                        frame->dts += baseAudioDTS;
+
+                        AVFrame * out = new AVFrame();
+                        int gotFrame = 0;
+                        avcodec_decode_audio4(this->audioCodec, out, &gotFrame, &pkt);
+                        if (gotFrame)
+                        {
+                            int bufsize = av_samples_get_buffer_size(NULL, this->audioCodec->channels, out->nb_samples,
+                                                                     this->audioCodec->sample_fmt, 1);
+                            uint8_t * outputBuffer = new uint8_t[bufsize];
+                            swr_convert(this->swr, &outputBuffer, out->nb_samples, (const uint8_t **)out->data,
+                                        out->nb_samples);
+
+                            frame->video = false;
+                            frame->frame = out;
+                            frame->convertedSize = bufsize;
+                            frame->convertedAudio = outputBuffer;
+
+                            return result;
+                        }
+                        else
+                        {
+                            delete out;
+                        }
                     }
                 }
                 else

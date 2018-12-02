@@ -6,5 +6,6 @@ struct VideoBlock
     uint8_t * data;
     double pts;
     double dts;
+    double duration;
     bool looped;
 };
