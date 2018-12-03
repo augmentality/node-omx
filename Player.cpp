@@ -11,6 +11,11 @@ NAN_MODULE_INIT(Player::Init) {
     tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
     Nan::SetPrototypeMethod(tpl, "loadURL", loadURL);
+    Nan::SetPrototypeMethod(tpl, "play", play);
+    Nan::SetPrototypeMethod(tpl, "stop", stop);
+    Nan::SetPrototypeMethod(tpl, "pause", pause);
+    Nan::SetPrototypeMethod(tpl, "setSpeed", setSpeed);
+    Nan::SetPrototypeMethod(tpl, "getTime", getTime);
 
     constructor.Reset(Nan::GetFunction(tpl).ToLocalChecked());
     Nan::Set(target, Nan::New("Player").ToLocalChecked(), Nan::GetFunction(tpl).ToLocalChecked());
@@ -47,21 +52,15 @@ NAN_METHOD(Player::loadURL)
     Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
     if (info.Length() > 0)
     {
-        if (info[0]->IsString())
+        try
         {
-            try
-            {
-                v8::String::Utf8Value param1(info[0]->ToString());
-                obj->nativePlayer = new NativePlayer(std::string(*param1));
-            }
-            catch(std::runtime_error ex)
-            {
-                return Nan::ThrowError(Nan::New(ex.what()).ToLocalChecked());
-            }
+            v8::String::Utf8Value param1(info[0]->ToString());
+            obj->nativePlayer = new NativePlayer(std::string(*param1));
+            obj->playState = 1;
         }
-        else
+        catch(std::runtime_error ex)
         {
-            return Nan::ThrowError(Nan::New("String URL expected").ToLocalChecked());
+            return Nan::ThrowError(Nan::New(ex.what()).ToLocalChecked());
         }
     }
     else
@@ -69,3 +68,67 @@ NAN_METHOD(Player::loadURL)
         return Nan::ThrowError(Nan::New("String URL expected").ToLocalChecked());
     }
 }
+
+NAN_METHOD(Player::play)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (obj->playState < 1)
+    {
+        return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    if (obj->playState == 2)
+    {
+        return Nan::ThrowError(Nan::New("Media already playing").ToLocalChecked());
+    }
+    obj->nativePlayer->play();
+    obj->playState = 2;
+}
+
+NAN_METHOD(Player::pause)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (obj->playState < 2)
+    {
+        return Nan::ThrowError(Nan::New("Stream is not started").ToLocalChecked());
+    }
+    obj->nativePlayer->pause();
+    obj->playState = 3;
+}
+
+NAN_METHOD(Player::setSpeed)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (obj->playState < 1)
+    {
+        return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    if (info.Length() < 1)
+    {
+        return Nan::ThrowError(Nan::New("Speed not provided").ToLocalChecked());
+    }
+    double speed = info[0]->NumberValue();
+    obj->nativePlayer->setSpeed((float)speed);
+}
+
+NAN_METHOD(Player::getTime)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (obj->playState < 1)
+    {
+        return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    float time = obj->nativePlayer->getTime();
+    info.GetReturnValue().Set(time);
+}
+
+NAN_METHOD(Player::stop)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (obj->playState < 1)
+    {
+       return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    delete obj->nativePlayer;
+    obj->playState = 0;
+}
+
