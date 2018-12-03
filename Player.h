@@ -20,6 +20,7 @@ class Player : public Nan::ObjectWrap
         static NAN_METHOD(play);
         static NAN_METHOD(pause);
         static NAN_METHOD(setSpeed);
+        static NAN_METHOD(setLoop);
         static NAN_METHOD(getTime);
         static NAN_METHOD(stop);
         static Nan::Persistent<v8::Function> constructor;

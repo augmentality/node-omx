@@ -15,6 +15,7 @@ NAN_MODULE_INIT(Player::Init) {
     Nan::SetPrototypeMethod(tpl, "stop", stop);
     Nan::SetPrototypeMethod(tpl, "pause", pause);
     Nan::SetPrototypeMethod(tpl, "setSpeed", setSpeed);
+    Nan::SetPrototypeMethod(tpl, "setLoop", setLoop);
     Nan::SetPrototypeMethod(tpl, "getTime", getTime);
 
     constructor.Reset(Nan::GetFunction(tpl).ToLocalChecked());
@@ -108,6 +109,17 @@ NAN_METHOD(Player::setSpeed)
     }
     double speed = info[0]->NumberValue();
     obj->nativePlayer->setSpeed((float)speed);
+}
+
+NAN_METHOD(Player::setLoop)
+{
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    if (info.Length() < 1)
+    {
+        return Nan::ThrowError(Nan::New("Loop parameter not provided").ToLocalChecked());
+    }
+    bool loop  = info[0]->BooleanValue();
+    obj->nativePlayer->setLoop(loop);
 }
 
 NAN_METHOD(Player::getTime)

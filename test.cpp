@@ -3,8 +3,6 @@
 int main (int argc, char **argv)
 {
     NativePlayer * n = new NativePlayer(std::string("http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"));
-    //NativePlayer * n = new NativePlayer(std::string("./test.h264"));
-    //NativePlayer * n = new NativePlayer(std::string("http://movies.casperpanel.com/epicloop.mp4"));
 
     int delay = 5;
     do
@@ -20,7 +18,7 @@ int main (int argc, char **argv)
 
 
     // while that is playing, load another
-    NativePlayer * n2 = new NativePlayer(std::string("trump.mp4"));
+    NativePlayer * n2 = new NativePlayer(std::string("http://movies.casperdns.com/sintel.mp4"));
 
     sleep(10);
     printf("Pausing\n");

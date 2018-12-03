@@ -22,6 +22,8 @@ public:
 
     void setSpeed(float scale);
 
+    void setLoop(bool loop);
+
     double getTime();
 
 private:

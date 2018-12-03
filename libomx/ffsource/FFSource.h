@@ -4,6 +4,7 @@
 #include "FFFrame.h"
 #include <string>
 #include "../ilclient/ilc.h"
+#include <mutex>
 
 extern "C" {
     #include <libavcodec/avcodec.h>
@@ -229,6 +230,12 @@ class FFSource
             freepkt2 = true;
         }
 
+        void setLoop(bool pLoop)
+        {
+            std::unique_lock<std::mutex> lk(loopMutex);
+            loop = pLoop;
+        }
+
         ~FFSource()
         {
             if (this->swr != nullptr)
@@ -308,6 +315,11 @@ class FFSource
                 result = av_read_frame(this->fmt_ctx, &this->pkt);
 		        if (result < 0)
                 {
+                    std::unique_lock<std::mutex> lk(loopMutex);
+		            if (!loop)
+                    {
+		                return -1;
+                    }
                     frame->loopedVideo = true;
                     frame->loopedAudio = true;
 
@@ -428,7 +440,8 @@ class FFSource
 
 
     private:
-
+        std::mutex loopMutex;
+        bool loop = false;
         bool freepkt1 = false;
         bool freepkt2 = false;
         bool freepktdata1 = false;

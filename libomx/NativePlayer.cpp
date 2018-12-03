@@ -207,6 +207,13 @@ void NativePlayer::playThreadFunc()
         delete block;
     }
 }
+void NativePlayer::setLoop(bool loop)
+{
+    if (this->src != nullptr)
+    {
+        this->src->setLoop(loop);
+    }
+}
 NativePlayer::~NativePlayer()
 {
     this->playing = false;
