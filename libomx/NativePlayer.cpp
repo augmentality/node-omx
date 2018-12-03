@@ -213,6 +213,16 @@ NativePlayer::~NativePlayer()
     this->playThread.join();
     if (frame != nullptr)
     {
+        if (frame->frame != nullptr)
+        {
+            av_frame_free(&frame->frame);
+            frame->frame = nullptr;
+        }
+        if (frame->convertedAudio != nullptr)
+        {
+            delete[] frame->convertedAudio;
+            frame->convertedAudio = nullptr;
+        }
         delete frame;
     }
     while (prebuffer.size() > 0)
@@ -237,10 +247,6 @@ NativePlayer::~NativePlayer()
     {
         delete this->src;
     }
-    if (this->clock != nullptr)
-    {
-        delete this->clock;
-    }
     if (this->audioThread != nullptr)
     {
         delete this->audioThread;
@@ -248,5 +254,13 @@ NativePlayer::~NativePlayer()
     if (this->videoThread != nullptr)
     {
         delete this->videoThread;
+    }
+    if (this->clock != nullptr)
+    {
+        delete this->clock;
+    }
+    if (this->client != nullptr)
+    {
+        delete this->client;
     }
 }

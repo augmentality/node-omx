@@ -86,7 +86,18 @@ void VideoThread::videoThreadFunc()
             bool error = false;
             while (pSize != 0)
             {
-                buf = vdc->getInputBuffer(130, 1);
+
+                buf = nullptr;
+                while(!playbackComplete && buf == nullptr)
+                {
+                    buf = vdc->getInputBuffer(130, 0);
+                    if (buf == nullptr)
+                    {
+                        usleep(10000);
+                    }
+                }
+                if (playbackComplete) break;
+
                 if (buf == nullptr)
                     break;
                 buf->nFlags = 0;
@@ -206,6 +217,9 @@ VideoThread::~VideoThread()
         delete this->vdr;
         this->vdr = nullptr;
     }
+
+    this->vdc->disablePortBuffers(130, nullptr, nullptr, nullptr);
+
     if (this->vdc != nullptr)
     {
         delete this->vdc;

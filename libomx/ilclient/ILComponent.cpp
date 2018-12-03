@@ -934,7 +934,7 @@ int ILComponent::enablePortBuffers(int portIndex, ILCLIENT_MALLOC_T ilclient_mal
 {
     OMX_ERRORTYPE error;
     OMX_PARAM_PORTDEFINITIONTYPE portdef;
-    OMX_BUFFERHEADERTYPE *list = nullptr, **end = &list;
+    OMX_BUFFERHEADERTYPE * list = nullptr, ** end = &list;
     OMX_STATETYPE state;
     int i;
 
@@ -945,7 +945,8 @@ int ILComponent::enablePortBuffers(int portIndex, ILCLIENT_MALLOC_T ilclient_mal
 
     // work out buffer requirements, check port is in the right state
     error = OMX_GetParameter(this->comp->comp, OMX_IndexParamPortDefinition, &portdef);
-    if(error != OMX_ErrorNone || portdef.bEnabled != OMX_FALSE || portdef.nBufferCountActual == 0 || portdef.nBufferSize == 0)
+    if (error != OMX_ErrorNone || portdef.bEnabled != OMX_FALSE || portdef.nBufferCountActual == 0 ||
+        portdef.nBufferSize == 0)
         return -1;
 
     // check component is in the right state to accept buffers
@@ -957,40 +958,42 @@ int ILComponent::enablePortBuffers(int portIndex, ILCLIENT_MALLOC_T ilclient_mal
     error = OMX_SendCommand(this->comp->comp, OMX_CommandPortEnable, portIndex, NULL);
     vc_assert(error == OMX_ErrorNone);
 
-    for (i=0; i != portdef.nBufferCountActual; i++)
+    for (i = 0; i != portdef.nBufferCountActual; i++)
     {
-        unsigned char *buf;
-        if(ilclient_malloc)
+        unsigned char * buf;
+        if (ilclient_malloc)
         {
-            buf = (unsigned char *) ilclient_malloc(priv, portdef.nBufferSize, portdef.nBufferAlignment, this->comp->bufname);
+            buf = (unsigned char *)ilclient_malloc(priv, portdef.nBufferSize, portdef.nBufferAlignment,
+                                                   this->comp->bufname);
         }
         else
         {
-            buf = (unsigned char *) vcos_malloc_aligned(portdef.nBufferSize, portdef.nBufferAlignment, this->comp->bufname);
+            buf = (unsigned char *)vcos_malloc_aligned(portdef.nBufferSize, portdef.nBufferAlignment,
+                                                       this->comp->bufname);
         }
 
-        if(!buf)
+        if (!buf)
         {
             break;
         }
 
         error = OMX_UseBuffer(this->comp->comp, end, portIndex, NULL, portdef.nBufferSize, buf);
-        if(error != OMX_ErrorNone)
+        if (error != OMX_ErrorNone)
         {
-            if(ilclient_free)
+            if (ilclient_free)
                 ilclient_free(priv, buf);
             else
-            vcos_free(buf);
+                vcos_free(buf);
 
             break;
         }
-        end = (OMX_BUFFERHEADERTYPE **) &((*end)->pAppPrivate);
+        end = (OMX_BUFFERHEADERTYPE * *) & ((*end)->pAppPrivate);
     }
 
     // queue these buffers
     vcos_semaphore_wait(&comp->sema);
 
-    if(portdef.eDir == OMX_DirInput)
+    if (portdef.eDir == OMX_DirInput)
     {
         *end = comp->in_list;
         comp->in_list = list;
@@ -1003,8 +1006,8 @@ int ILComponent::enablePortBuffers(int portIndex, ILCLIENT_MALLOC_T ilclient_mal
 
     vcos_semaphore_post(&comp->sema);
 
-    if(i != portdef.nBufferCountActual ||
-       this->waitForCommandComplete(OMX_CommandPortEnable, portIndex) < 0)
+    if (i != portdef.nBufferCountActual ||
+        this->waitForCommandComplete(OMX_CommandPortEnable, portIndex) < 0)
     {
         this->disablePortBuffers(portIndex, NULL, ilclient_free, priv);
 
@@ -1023,8 +1026,8 @@ int ILComponent::enablePortBuffers(int portIndex, ILCLIENT_MALLOC_T ilclient_mal
 int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferList, ILCLIENT_FREE_T ilclient_free, void *priv)
 {
     OMX_ERRORTYPE error;
-    OMX_BUFFERHEADERTYPE *list = bufferList;
-    OMX_BUFFERHEADERTYPE **head, *clist, *prev;
+    OMX_BUFFERHEADERTYPE * list = bufferList;
+    OMX_BUFFERHEADERTYPE ** head, * clist, * prev;
     OMX_PARAM_PORTDEFINITIONTYPE portdef;
     int num;
 
@@ -1036,7 +1039,8 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
 
     // work out buffer requirements, check port is in the right state
     error = OMX_GetParameter(this->comp->comp, OMX_IndexParamPortDefinition, &portdef);
-    if(error != OMX_ErrorNone || portdef.bEnabled != OMX_TRUE || portdef.nBufferCountActual == 0 || portdef.nBufferSize == 0)
+    if (error != OMX_ErrorNone || portdef.bEnabled != OMX_TRUE || portdef.nBufferCountActual == 0 ||
+        portdef.nBufferSize == 0)
     {
         return error;
     }
@@ -1046,11 +1050,11 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
     error = OMX_SendCommand(this->comp->comp, OMX_CommandPortDisable, portIndex, nullptr);
     vc_assert(error == OMX_ErrorNone);
 
-    while(num > 0)
+    while (num > 0)
     {
         VCOS_UNSIGNED set;
 
-        if(list == nullptr)
+        if (list == nullptr)
         {
             vcos_semaphore_wait(&comp->sema);
 
@@ -1059,21 +1063,21 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
             clist = *head;
             prev = nullptr;
 
-            while(clist)
+            while (clist)
             {
-                if((portdef.eDir == OMX_DirInput ? clist->nInputPortIndex : clist->nOutputPortIndex) == portIndex)
+                if ((portdef.eDir == OMX_DirInput ? clist->nInputPortIndex : clist->nOutputPortIndex) == portIndex)
                 {
-                    OMX_BUFFERHEADERTYPE *pBuffer = clist;
+                    OMX_BUFFERHEADERTYPE * pBuffer = clist;
 
-                    if(!prev)
+                    if (!prev)
                     {
-                        clist = *head = (OMX_BUFFERHEADERTYPE *) pBuffer->pAppPrivate;
+                        clist = *head = (OMX_BUFFERHEADERTYPE *)pBuffer->pAppPrivate;
                     }
                     else
                     {
-                        clist = (OMX_BUFFERHEADERTYPE *) pBuffer->pAppPrivate;
+                        clist = (OMX_BUFFERHEADERTYPE *)pBuffer->pAppPrivate;
                     }
-                    prev->pAppPrivate = (OMX_PTR) clist;
+                    pBuffer->pAppPrivate = (OMX_PTR)clist;
 
                     pBuffer->pAppPrivate = list;
                     list = pBuffer;
@@ -1081,31 +1085,31 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
                 else
                 {
                     prev = clist;
-                    clist = (OMX_BUFFERHEADERTYPE *) &(clist->pAppPrivate);
+                    clist = (OMX_BUFFERHEADERTYPE * ) & (clist->pAppPrivate);
                 }
             }
 
             vcos_semaphore_post(&comp->sema);
         }
 
-        while(list)
+        while (list)
         {
-            void *buf = list->pBuffer;
-            OMX_BUFFERHEADERTYPE *next = (OMX_BUFFERHEADERTYPE *) list->pAppPrivate;
+            void * buf = list->pBuffer;
+            OMX_BUFFERHEADERTYPE * next = (OMX_BUFFERHEADERTYPE *)list->pAppPrivate;
 
             error = OMX_FreeBuffer(comp->comp, portIndex, list);
             vc_assert(error == OMX_ErrorNone);
 
-            if(ilclient_free)
+            if (ilclient_free)
                 ilclient_free(priv, buf);
             else
-            vcos_free(buf);
+                vcos_free(buf);
 
             num--;
             list = next;
         }
 
-        if(num)
+        if (num)
         {
             OMX_U32 mask = ILCLIENT_PORT_DISABLED | ILCLIENT_EVENT_ERROR;
             mask |= (portdef.eDir == OMX_DirInput ? ILCLIENT_EMPTY_BUFFER_DONE : ILCLIENT_FILL_BUFFER_DONE);
@@ -1113,15 +1117,16 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
             // also wait for command complete/error in case we didn't have all the buffers allocated
             vcos_event_flags_get(&comp->event, mask, VCOS_OR_CONSUME, -1, &set);
 
-            if((set & ILCLIENT_EVENT_ERROR) && this->removeEvent(OMX_EventError, 0, 1, 1, 0) >= 0)
+            if ((set & ILCLIENT_EVENT_ERROR) && this->removeEvent(OMX_EventError, 0, 1, 1, 0) >= 0)
                 return 0;
 
-            if((set & ILCLIENT_PORT_DISABLED) && this->removeEvent(OMX_EventCmdComplete, OMX_CommandPortDisable, 0, portIndex, 0) >= 0)
+            if ((set & ILCLIENT_PORT_DISABLED) &&
+                this->removeEvent(OMX_EventCmdComplete, OMX_CommandPortDisable, 0, portIndex, 0) >= 0)
                 return 0;
         }
     }
 
-    if(this->waitForCommandComplete(OMX_CommandPortDisable, portIndex) < 0)
+    if (this->waitForCommandComplete(OMX_CommandPortDisable, portIndex) < 0)
         vc_assert(0);
 
     return 0;
@@ -1129,22 +1134,23 @@ int ILComponent::disablePortBuffers(int portIndex, OMX_BUFFERHEADERTYPE *bufferL
 
 OMX_BUFFERHEADERTYPE * ILComponent::getInputBuffer(int portIndex, int block)
 {
-    OMX_BUFFERHEADERTYPE *ret = nullptr, *prev = nullptr;
+    OMX_BUFFERHEADERTYPE * ret = nullptr, * prev = nullptr;
 
-    do {
+    do
+    {
         VCOS_UNSIGNED set;
 
         vcos_semaphore_wait(&comp->sema);
         ret = comp->in_list;
-        while(ret != nullptr && ret->nInputPortIndex != portIndex)
+        while (ret != nullptr && ret->nInputPortIndex != portIndex)
         {
             prev = ret;
             ret = (OMX_BUFFERHEADERTYPE *)ret->pAppPrivate;
         }
 
-        if(ret)
+        if (ret)
         {
-            if(prev == nullptr)
+            if (prev == nullptr)
             {
                 comp->in_list = (OMX_BUFFERHEADERTYPE *)ret->pAppPrivate;
             }
@@ -1157,10 +1163,10 @@ OMX_BUFFERHEADERTYPE * ILComponent::getInputBuffer(int portIndex, int block)
         }
         vcos_semaphore_post(&comp->sema);
 
-        if(block && !ret)
+        if (block && !ret)
             vcos_event_flags_get(&comp->event, ILCLIENT_EMPTY_BUFFER_DONE, VCOS_OR_CONSUME, -1, &set);
 
-    } while(block && !ret);
+    } while (block && !ret);
 
     return ret;
 }

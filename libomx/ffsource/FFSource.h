@@ -224,6 +224,9 @@ class FFSource
             av_init_packet(&pkt2);
             pkt2.data = NULL;
             pkt2.size = 0;
+
+            freepkt1 = true;
+            freepkt2 = true;
         }
 
         ~FFSource()
@@ -238,22 +241,32 @@ class FFSource
                 av_bitstream_filter_close(this->annexb);
                 this->annexb = nullptr;
             }
+            if (this->audioCodec != nullptr)
+            {
+                avcodec_close(this->audioCodec);
+                this->audioCodec = nullptr;
+            }
             if (this->fmt_ctx != nullptr)
             {
                 avformat_close_input(&this->fmt_ctx);
                 this->fmt_ctx = nullptr;
             }
-            if (pkt2.data != NULL)
+            if (freepktdata2 && pkt2.data != NULL)
             {
                 av_freep(&pkt2.data);
             }
-
-            if (pkt.data != NULL)
+            if (freepktdata1 && pkt.data != NULL)
             {
-                av_freep(pkt.data);
+                av_freep(&pkt.data);
             }
-            av_free_packet(&pkt2);
-            av_free_packet(&pkt);
+            if (freepkt2)
+            {
+                av_free_packet(&pkt2);
+            }
+            if (freepkt1)
+            {
+                av_free_packet(&pkt);
+            }
         }
         int getPacket(FFFrame * frame)
         {
@@ -263,8 +276,7 @@ class FFSource
             }
             if (frame->frame != nullptr)
             {
-                av_frame_unref(frame->frame);
-                delete frame->frame;
+                av_frame_free(&frame->frame);
                 frame->frame = nullptr;
             }
             if (frame->convertedAudio != nullptr)
@@ -279,6 +291,8 @@ class FFSource
                 {
                     av_freep(&this->pkt2.data);
                     av_free_packet(&this->pkt2);
+                    freepkt2 = false;
+                    freepktdata2 = false;
                     pkt2.data = NULL;
                     pkt2.size = 0;
                 }
@@ -287,11 +301,11 @@ class FFSource
                     // DON'T zero data here or av_read_frame won't free it
                     // (and if we try to free it, we'll crash)
                     av_free_packet(&this->pkt);
+                    freepkt1 = false;
                 }
                 frame->pkt = nullptr;
 
                 result = av_read_frame(this->fmt_ctx, &this->pkt);
-
 		        if (result < 0)
                 {
                     frame->loopedVideo = true;
@@ -312,12 +326,15 @@ class FFSource
                     else
                     {
                         result = av_read_frame(this->fmt_ctx, &this->pkt);
+
                         if (result < 0)
                         {
                             return result;
                         }
                     }
                 }
+                freepkt1 = true;
+		        freepktdata1 = true;
 
 
                 AVStream *pStream = this->fmt_ctx->streams[this->pkt.stream_index];
@@ -351,7 +368,9 @@ class FFSource
                     int a = av_bitstream_filter_filter(annexb, this->fmt_ctx->streams[pkt.stream_index]->codec, NULL,
                                                        &pkt2.data, &pkt2.size, pkt.data, pkt.size,
                                                        pkt.flags & AV_PKT_FLAG_KEY);
-
+                    freepkt1 = false;
+                    freepkt2 = true;
+                    freepktdata2 = true;
                     frame->video = true;
                     frame->pkt = &pkt2;
                     return result;
@@ -379,8 +398,9 @@ class FFSource
                         frame->pts += baseAudioPTS;
                         frame->dts += baseAudioDTS;
 
-                        AVFrame * out = new AVFrame();
+                        AVFrame * out = av_frame_alloc();
                         int gotFrame = 0;
+                        freepkt1 = false;
                         avcodec_decode_audio4(this->audioCodec, out, &gotFrame, &pkt);
                         if (gotFrame)
                         {
@@ -403,16 +423,16 @@ class FFSource
                         }
                     }
                 }
-                else
-                {
-
-                }
             }
         }
 
 
     private:
 
+        bool freepkt1 = false;
+        bool freepkt2 = false;
+        bool freepktdata1 = false;
+        bool freepktdata2 = false;
         AVPacket pkt;
         AVPacket pkt2;
         AVPacket buffer_pkt;

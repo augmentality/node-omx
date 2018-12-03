@@ -2,10 +2,9 @@
 
 int main (int argc, char **argv)
 {
-    //NativePlayer * n = new NativePlayer(std::string("http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"));
+    NativePlayer * n = new NativePlayer(std::string("http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"));
     //NativePlayer * n = new NativePlayer(std::string("./test.h264"));
     //NativePlayer * n = new NativePlayer(std::string("http://movies.casperpanel.com/epicloop.mp4"));
-    NativePlayer * n = new NativePlayer(std::string("trump.mp4"));
 
     int delay = 5;
     do
@@ -18,6 +17,11 @@ int main (int argc, char **argv)
     while(delay > 0);
 
     n->play();
+
+
+    // while that is playing, load another
+    NativePlayer * n2 = new NativePlayer(std::string("trump.mp4"));
+
     sleep(10);
     printf("Pausing\n");
     n->pause();
@@ -35,9 +39,16 @@ int main (int argc, char **argv)
     fflush(stdout);
     n->setSpeed(0.9);
     sleep(5);
-    printf("Stopping, cleanup");
+    printf("Stopping, cleanup\n");
     fflush(stdout);
     delete n;
-    printf("done?");
+    printf("Starting second vid\n");
+    fflush(stdout);
+    n2->play();
+    sleep(10);
+    printf("Killing second video\n");
+    fflush(stdout);
+    delete n2;
+    printf("DONE");
     fflush(stdout);
 }

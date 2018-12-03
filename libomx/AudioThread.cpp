@@ -37,13 +37,30 @@ void AudioThread::audioThreadFunc()
             size_t sample_size = pSize / (block->streamCount * block->sampleCount);
 
             OMX_ERRORTYPE r;
-            OMX_BUFFERHEADERTYPE *buff_header = NULL;
+            OMX_BUFFERHEADERTYPE *buff_header = nullptr;
             int k, m, n;
             for (k = 0, n = 0; n < block->sampleCount; n++)
             {
                 if (k == 0)
                 {
-                    buff_header = arc->getInputBuffer(100, 1 /* block */);
+                    buff_header = nullptr;
+                    while(!playbackComplete && buff_header == nullptr)
+                    {
+                        buff_header = arc->getInputBuffer(100, 0 /* block */);
+                        if (buff_header == nullptr)
+                        {
+                            usleep(10000);
+                        }
+                    }
+                    if (playbackComplete)
+                    {
+                        buff_header = nullptr;
+                        break;
+                    }
+                }
+                if (playbackComplete)
+                {
+                    break;
                 }
                 memcpy(&buff_header->pBuffer[k], &block->data[n * sample_size], sample_size);
                 k += sample_size;
@@ -75,7 +92,7 @@ void AudioThread::audioThreadFunc()
                     buff_header = NULL;
                 }
             }
-            if (buff_header != NULL)
+            if (!playbackComplete && buff_header != NULL)
             {
                 buff_header->nFilledLen = k;
 
@@ -102,7 +119,6 @@ void AudioThread::audioThreadFunc()
             delete block;
         }
     }
-    this->arc->changeState(OMX_StateIdle);
 }
 
 AudioBlock * AudioThread::dequeue()
@@ -182,6 +198,9 @@ AudioThread::~AudioThread()
         delete this->clockAudioTunnel;
         this->clockAudioTunnel = nullptr;
     }
+
+    this->arc->disablePortBuffers(100, nullptr, nullptr, nullptr);
+
     if (this->arc != nullptr)
     {
         delete this->arc;
