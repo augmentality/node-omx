@@ -17,57 +17,93 @@ void AudioThread::start()
 {
     this->audioThread = std::thread(&AudioThread::audioThreadFunc, this);
 }
-
+void AudioThread::waitForCompletion()
+{
+    waitingForEnd = true;
+    fflush(stdout);
+    {
+        printf("Waiting for audio completion");
+        std::unique_lock <std::mutex> lk(audioPlayingMutex);
+    }
+}
 void AudioThread::audioThreadFunc()
 {
     this->arc->changeState(OMX_StateExecuting);
-    while (!playbackComplete)
     {
-        AudioBlock * block = dequeue();
-        if (block != nullptr)
+        std::unique_lock<std::mutex> lk(audioPlayingMutex);
+        while (!playbackComplete)
         {
-            int format = block->audioFormat;
-            int readBytes = 0;
-            size_t pSize = block->dataSize;
-            bool error = false;
-
-            uint64_t timestamp = (uint64_t)(
-                    block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-
-            size_t sample_size = pSize / (block->streamCount * block->sampleCount);
-
-            OMX_ERRORTYPE r;
-            OMX_BUFFERHEADERTYPE *buff_header = nullptr;
-            int k, m, n;
-            for (k = 0, n = 0; n < block->sampleCount; n++)
+            AudioBlock * block = dequeue();
+            if (block != nullptr)
             {
-                if (k == 0)
+                int format = block->audioFormat;
+                int readBytes = 0;
+                size_t pSize = block->dataSize;
+                bool error = false;
+
+                uint64_t timestamp = (uint64_t)(
+                        block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
+
+                size_t sample_size = pSize / (block->streamCount * block->sampleCount);
+
+                OMX_ERRORTYPE r;
+                OMX_BUFFERHEADERTYPE *buff_header = nullptr;
+                int k, m, n;
+                for (k = 0, n = 0; n < block->sampleCount; n++)
                 {
-                    buff_header = nullptr;
-                    while(!playbackComplete && buff_header == nullptr)
+                    if (k == 0)
                     {
-                        buff_header = arc->getInputBuffer(100, 0 /* block */);
-                        if (buff_header == nullptr)
+                        buff_header = nullptr;
+                        while(!playbackComplete && buff_header == nullptr)
                         {
-                            usleep(10000);
+                            buff_header = arc->getInputBuffer(100, 0 /* block */);
+                            if (buff_header == nullptr)
+                            {
+                                usleep(10000);
+                            }
+                        }
+                        if (playbackComplete)
+                        {
+                            buff_header = nullptr;
+                            break;
                         }
                     }
                     if (playbackComplete)
                     {
-                        buff_header = nullptr;
                         break;
                     }
-                }
-                if (playbackComplete)
-                {
-                    break;
-                }
-                memcpy(&buff_header->pBuffer[k], &block->data[n * sample_size], sample_size);
-                k += sample_size;
-                if (k >= buff_header->nAllocLen)
-                {
-                    // this buffer is full
+                    memcpy(&buff_header->pBuffer[k], &block->data[n * sample_size], sample_size);
+                    k += sample_size;
+                    if (k >= buff_header->nAllocLen)
+                    {
+                        // this buffer is full
 
+                        buff_header->nFilledLen = k;
+
+                        if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
+                        {
+                            buff_header->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+                        }
+                        else
+                        {
+                            if (block->pts == DVD_NOPTS_VALUE)
+                            {
+                                buff_header->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                            }
+                            buff_header->nTimeStamp = ToOMXTime(timestamp);
+                        }
+
+                        r = arc->emptyBuffer(buff_header);
+                        if (r != OMX_ErrorNone)
+                        {
+                            fprintf(stderr, "Empty buffer error\n");
+                        }
+                        k = 0;
+                        buff_header = NULL;
+                    }
+                }
+                if (!playbackComplete && buff_header != NULL)
+                {
                     buff_header->nFilledLen = k;
 
                     if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
@@ -86,38 +122,31 @@ void AudioThread::audioThreadFunc()
                     r = arc->emptyBuffer(buff_header);
                     if (r != OMX_ErrorNone)
                     {
-                        fprintf(stderr, "Empty buffer error\n");
+                        fprintf(stderr, "Empty buffer error %s\n");
                     }
-                    k = 0;
-                    buff_header = NULL;
                 }
+                delete[] block->data;
+                delete block;
             }
-            if (!playbackComplete && buff_header != NULL)
+            else
             {
-                buff_header->nFilledLen = k;
-
-                if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
+                if (waitingForEnd)
                 {
-                    buff_header->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
-                }
-                else
-                {
-                    if (block->pts == DVD_NOPTS_VALUE)
-                    {
-                        buff_header->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
-                    }
-                    buff_header->nTimeStamp = ToOMXTime(timestamp);
-                }
-
-                r = arc->emptyBuffer(buff_header);
-                if (r != OMX_ErrorNone)
-                {
-                    fprintf(stderr, "Empty buffer error %s\n");
+                    playbackComplete = true;
                 }
             }
-            delete[] block->data;
-            delete block;
         }
+    }
+
+    OMX_BUFFERHEADERTYPE * buff_header = arc->getInputBuffer(100, 1 /* block */);
+    if (buff_header != nullptr)
+    {
+        buff_header->nOffset = 0;
+        buff_header->nFilledLen = 0;
+        buff_header->nTimeStamp = ToOMXTime(0LL);
+
+        buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
+        arc->emptyBuffer(buff_header);
     }
 }
 
@@ -128,11 +157,21 @@ AudioBlock * AudioThread::dequeue()
     {
         while (!playbackComplete && audioQueue.empty())
         {
+            if (audioQueue.empty() && waitingForEnd)
+            {
+                playbackComplete = true;
+                return nullptr;
+            }
             audioReady.wait_for(lk,  std::chrono::milliseconds(100), [&]()
             {
                 return !audioQueue.empty();
             });
         }
+    }
+    if (audioQueue.empty() && waitingForEnd)
+    {
+        playbackComplete = true;
+        return nullptr;
     }
     if (playbackComplete || audioQueue.empty())
     {

@@ -4,3 +4,7 @@ VideoRenderComponent::VideoRenderComponent(ILClient *client): ILComponent(client
 {
 
 }
+void VideoRenderComponent::flush()
+{
+
+}

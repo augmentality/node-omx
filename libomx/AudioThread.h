@@ -18,9 +18,9 @@ public:
     ~AudioThread();
     void start();
     void addData(AudioBlock * block);
-
+    void waitForCompletion();
 private:
-
+    bool waitingForEnd = false;
     bool playbackComplete = false;
 
     void audioThreadFunc();
@@ -33,6 +33,7 @@ private:
     ILTunnel * clockAudioTunnel = nullptr;
 
     std::thread audioThread;
+    std::mutex audioPlayingMutex;
     std::mutex audioQueueMutex;
     std::condition_variable audioReady;
     std::queue<AudioBlock *> audioQueue;

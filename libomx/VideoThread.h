@@ -20,14 +20,14 @@ public:
     ~VideoThread();
     void start();
     void addData(VideoBlock * block);
-
+    void waitForCompletion();
 private:
     void videoThreadFunc();
     void waitForBuffer();
     VideoBlock * dequeue();
 
     bool playbackComplete = false;
-
+    bool waitingForEnd = false;
     ILTunnel * decodeTunnel = nullptr;
     ILTunnel * schedTunnel = nullptr;
     ILClient * client = nullptr;
@@ -38,6 +38,7 @@ private:
     ILTunnel * clockSchedTunnel = nullptr;
 
     std::thread videoThread;
+    std::mutex videoPlayingMutex;
     std::mutex videoQueueMutex;
     std::condition_variable videoReady;
     std::queue<VideoBlock *> videoQueue;

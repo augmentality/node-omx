@@ -29,6 +29,15 @@ Player::Player()
 
 Player::~Player()
 {
+    if (nativePlayer != nullptr)
+    {
+        delete nativePlayer;
+    }
+}
+
+NAN_METHOD(Player::handleStopped)
+{
+
 }
 
 NAN_METHOD(Player::New)
@@ -48,21 +57,38 @@ NAN_METHOD(Player::New)
     }
 }
 
+struct runPlayerData
+{
+    uv_work_t request;
+    std::string url;
+    Player * player;
+};
+
+NAN_INLINE void playbackCompletedEvent (uv_work_t* req)
+{
+    printf("END OF LINE");
+}
+NAN_INLINE void videoPlaybackComplete (uv_work_t* req)
+{
+    runPlayerData * data = static_cast<runPlayerData*>(req->data);
+    Player * objRef = data->player;
+    printf("PLAYVIDEO OBJECT REF: %d\n", objRef);
+    objRef->completePlayback();
+}
 NAN_METHOD(Player::loadURL)
 {
-    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
+    Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.Holder());
     if (info.Length() > 0)
     {
-        try
+        v8::String::Utf8Value param1(info[0]->ToString());
+        obj->nativePlayer = new NativePlayer(*param1, [obj]()
         {
-            v8::String::Utf8Value param1(info[0]->ToString());
-            obj->nativePlayer = new NativePlayer(std::string(*param1));
-            obj->playState = 1;
-        }
-        catch(std::runtime_error ex)
-        {
-            return Nan::ThrowError(Nan::New(ex.what()).ToLocalChecked());
-        }
+            runPlayerData * data = new runPlayerData();
+            data->request.data = (void *)data;
+            data->player = obj;
+            uv_queue_work(uv_default_loop(), &data->request, videoPlaybackComplete, reinterpret_cast<uv_after_work_cb>(playbackCompletedEvent));
+        });
+        obj->playState = 1;
     }
     else
     {
@@ -81,6 +107,10 @@ NAN_METHOD(Player::play)
     {
         return Nan::ThrowError(Nan::New("Media already playing").ToLocalChecked());
     }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
+    }
     obj->nativePlayer->play();
     obj->playState = 2;
 }
@@ -92,6 +122,10 @@ NAN_METHOD(Player::pause)
     {
         return Nan::ThrowError(Nan::New("Stream is not started").ToLocalChecked());
     }
+        if (obj->nativePlayer == nullptr)
+        {
+            return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
+        }
     obj->nativePlayer->pause();
     obj->playState = 3;
 }
@@ -107,6 +141,10 @@ NAN_METHOD(Player::setSpeed)
     {
         return Nan::ThrowError(Nan::New("Speed not provided").ToLocalChecked());
     }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
+    }
     double speed = info[0]->NumberValue();
     obj->nativePlayer->setSpeed((float)speed);
 }
@@ -118,7 +156,12 @@ NAN_METHOD(Player::setLoop)
     {
         return Nan::ThrowError(Nan::New("Loop parameter not provided").ToLocalChecked());
     }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
+    }
     bool loop  = info[0]->BooleanValue();
+    printf("SET LOOP: %d", loop);
     obj->nativePlayer->setLoop(loop);
 }
 
@@ -128,6 +171,10 @@ NAN_METHOD(Player::getTime)
     if (obj->playState < 1)
     {
         return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
     float time = obj->nativePlayer->getTime();
     info.GetReturnValue().Set(time);
@@ -139,6 +186,10 @@ NAN_METHOD(Player::stop)
     if (obj->playState < 1)
     {
        return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+    }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
     delete obj->nativePlayer;
     obj->playState = 0;

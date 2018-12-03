@@ -8,11 +8,12 @@
 #include "prebufferBlock.h"
 #include <thread>
 #include <queue>
+#include <functional>
 
 class NativePlayer
 {
 public:
-    NativePlayer(std::string url);
+    NativePlayer(std::string url, std::function<void()> pCompletedFunction);
 
     ~NativePlayer();
 
@@ -26,7 +27,10 @@ public:
 
     double getTime();
 
+    void waitForCompletion();
+
 private:
+    std::function<void()> playbackComplete;
     std::queue<PrebufferBlock *> prebuffer;
     FFFrame * frame = nullptr;
     bool playing = false;

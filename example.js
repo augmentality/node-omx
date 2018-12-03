@@ -4,7 +4,7 @@ const readline = require('readline');
 readline.emitKeypressEvents(process.stdin);
 
 const n = new omx.Player();
-n.loadURL('http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4');
+n.loadURL('http://movies.casperpanel.com/epicloop.mp4');
 n.play();
 let speed = 1.0;
 setInterval(() =>

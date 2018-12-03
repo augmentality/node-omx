@@ -18,19 +18,41 @@ void VideoThread::start()
 {
     this->videoThread = std::thread(&VideoThread::videoThreadFunc, this);
 }
-
+void VideoThread::waitForCompletion()
+{
+    waitingForEnd = true;
+    {
+        printf("Waiting for video completion\n");
+        std::unique_lock <std::mutex> lk(videoPlayingMutex);
+    }
+    printf("Flushing buffers\n");
+    this->vdc->flush();
+    this->vdr->flush();
+    printf("DONE FLUSH\n");
+}
 VideoBlock * VideoThread::dequeue()
 {
+    printf("Video Queue size %d\n", videoQueue.size());
     std::unique_lock<std::mutex> lk(videoQueueMutex);
     if (videoQueue.empty())
     {
         while (!playbackComplete && videoQueue.empty())
         {
+            if (videoQueue.empty() && waitingForEnd)
+            {
+                playbackComplete = true;
+                return nullptr;
+            }
             videoReady.wait_for(lk,  std::chrono::milliseconds(100), [&]()
             {
                 return !videoQueue.empty();
             });
         }
+    }
+    if (videoQueue.empty() && waitingForEnd)
+    {
+        playbackComplete = true;
+        return nullptr;
     }
     if (playbackComplete || videoQueue.empty())
     {
@@ -40,6 +62,10 @@ VideoBlock * VideoThread::dequeue()
     {
         VideoBlock * b = videoQueue.front();
         videoQueue.pop();
+        if (videoQueue.empty() && waitingForEnd)
+        {
+            playbackComplete = true;
+        }
         if (videoQueue.size() < VIDEO_QUEUE_SIZE && !bufferReady)
         {
             std::unique_lock<std::mutex> lk(readyForDataMutex);
@@ -73,102 +99,123 @@ void VideoThread::videoThreadFunc()
     int audio_port_settings_changed = 0;
     int first_packet = 1;
     unsigned int data_len = 0;
-    while (!playbackComplete)
     {
-        VideoBlock * block = dequeue();
-        if (block != nullptr)
+        std::unique_lock<std::mutex> lk(videoPlayingMutex);
+        while (!playbackComplete)
         {
-            uint64_t timestamp = (uint64_t)(
-                    block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
-
-            int readBytes = 0;
-            int pSize = block->dataSize;
-            bool error = false;
-            while (pSize != 0)
+            VideoBlock * block = dequeue();
+            if (block != nullptr)
             {
+                uint64_t timestamp = (uint64_t)(
+                        block->pts != DVD_NOPTS_VALUE ? block->pts : block->dts != DVD_NOPTS_VALUE ? block->dts : 0);
 
-                buf = nullptr;
-                while(!playbackComplete && buf == nullptr)
+                int readBytes = 0;
+                int pSize = block->dataSize;
+                bool error = false;
+                while (pSize != 0)
                 {
-                    buf = vdc->getInputBuffer(130, 0);
-                    if (buf == nullptr)
+
+                    buf = nullptr;
+                    while(!playbackComplete && buf == nullptr)
                     {
-                        usleep(10000);
+                        buf = vdc->getInputBuffer(130, (waitingForEnd) ? 1 : 0);
+                        if (buf == nullptr)
+                        {
+                            usleep(10000);
+                        }
                     }
-                }
-                if (playbackComplete) break;
+                    if (playbackComplete) break;
 
-                if (buf == nullptr)
-                    break;
-                buf->nFlags = 0;
-                buf->nOffset = 0;
-                buf->nFilledLen = (pSize > buf->nAllocLen) ? buf->nAllocLen : pSize;
-                memcpy(buf->pBuffer, block->data + readBytes, buf->nFilledLen);
-                pSize -= buf->nFilledLen;
-                readBytes += buf->nFilledLen;
-                data_len += buf->nFilledLen;
-                if (port_settings_changed == 0 &&
-                    ((data_len > 0 && vdc->removeEvent(OMX_EventPortSettingsChanged, 131, 0, 0, 1) == 0) ||
-                     (data_len == 0 && vdc->waitForEvent(OMX_EventPortSettingsChanged, 131, 0, 0, 1,
-                                                         ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, 10000) ==
-                                       0)))
-                {
-                    port_settings_changed = 1;
-
-                    decodeTunnel = vdc->tunnelTo(131, sched, 10, 0, 0);
-                    schedTunnel = sched->tunnelTo(11, vdr, 90, 0, 1000);
-                    sched->changeState(OMX_StateExecuting);
-                    vdr->changeState(OMX_StateExecuting);
-                }
-
-                if (first_packet)
-                {
-                    buf->nFlags = OMX_BUFFERFLAG_STARTTIME;
-                    first_packet = 0;
-                }
-                else
-                {
-                    if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
+                    if (buf == nullptr)
+                        break;
+                    buf->nFlags = 0;
+                    buf->nOffset = 0;
+                    buf->nFilledLen = (pSize > buf->nAllocLen) ? buf->nAllocLen : pSize;
+                    memcpy(buf->pBuffer, block->data + readBytes, buf->nFilledLen);
+                    pSize -= buf->nFilledLen;
+                    readBytes += buf->nFilledLen;
+                    data_len += buf->nFilledLen;
+                    if (port_settings_changed == 0 &&
+                        ((data_len > 0 && vdc->removeEvent(OMX_EventPortSettingsChanged, 131, 0, 0, 1) == 0) ||
+                         (data_len == 0 && vdc->waitForEvent(OMX_EventPortSettingsChanged, 131, 0, 0, 1,
+                                                             ILCLIENT_EVENT_ERROR | ILCLIENT_PARAMETER_CHANGED, 10000) ==
+                                           0)))
                     {
-                        buf->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
+                        port_settings_changed = 1;
+
+                        decodeTunnel = vdc->tunnelTo(131, sched, 10, 0, 0);
+                        schedTunnel = sched->tunnelTo(11, vdr, 90, 0, 1000);
+                        sched->changeState(OMX_StateExecuting);
+                        vdr->changeState(OMX_StateExecuting);
+                    }
+
+                    if (first_packet)
+                    {
+                        buf->nFlags = OMX_BUFFERFLAG_STARTTIME;
+                        first_packet = 0;
                     }
                     else
                     {
-                        if (block->pts == DVD_NOPTS_VALUE)
+                        if (block->pts == DVD_NOPTS_VALUE && block->dts == DVD_NOPTS_VALUE)
                         {
-                            buf->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                            buf->nFlags |= OMX_BUFFERFLAG_TIME_UNKNOWN;
                         }
-
-
-                        if (!(buf->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN))
+                        else
                         {
-                            buf->nTimeStamp = ToOMXTime(timestamp);
+                            if (block->pts == DVD_NOPTS_VALUE)
+                            {
+                                buf->nFlags |= OMX_BUFFERFLAG_TIME_IS_DTS;
+                            }
+
+
+                            if (!(buf->nFlags & OMX_BUFFERFLAG_TIME_UNKNOWN))
+                            {
+                                buf->nTimeStamp = ToOMXTime(timestamp);
+                            }
                         }
                     }
-                }
-                data_len = 0;
+                    data_len = 0;
 
-                if (vdc->emptyBuffer(buf) != OMX_ErrorNone)
+                    if (vdc->emptyBuffer(buf) != OMX_ErrorNone)
+                    {
+                        error = true;
+                        break;
+                    }
+
+                }
+                delete[] block->data;
+                delete block;
+                if (error)
                 {
-                    error = true;
                     break;
                 }
-
+                if (buf == nullptr)
+                {
+                    return;
+                }
             }
-            delete[] block->data;
-            delete block;
-            if (error)
+            else
             {
-                break;
-            }
-            if (buf == nullptr)
-            {
-                return;
+                printf("@");
+                if (waitingForEnd)
+                {
+                    playbackComplete = true;
+                }
             }
         }
     }
+    printf("SENDING VIDEO EOS\n");
+    OMX_BUFFERHEADERTYPE * buff_header = vdc->getInputBuffer(130, 1 /* block */);
+    if (buff_header != nullptr)
+    {
+        buff_header->nOffset = 0;
+        buff_header->nFilledLen = 0;
+        buff_header->nTimeStamp = ToOMXTime(0LL);
 
-    this->vdc->changeState(OMX_StateIdle);
+        buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
+        vdc->emptyBuffer(buff_header);
+        printf("VIDEO EOS SENT\n");
+    }
 }
 void VideoThread::addData(VideoBlock * vb)
 {
@@ -185,9 +232,12 @@ void VideoThread::addData(VideoBlock * vb)
 }
 VideoThread::~VideoThread()
 {
+    printf("~VT1"); fflush(stdout);
     this->playbackComplete = true;
+    printf("~VT2"); fflush(stdout);
     this->videoThread.join();
-
+    printf("~VT3"); fflush(stdout);
+    this->vdc->changeState(OMX_StateIdle);
     // Empty queue
     while(videoQueue.size() > 0)
     {
@@ -196,35 +246,38 @@ VideoThread::~VideoThread()
         delete[] b->data;
         delete b;
     }
-
+    printf("~VT4"); fflush(stdout);
     if (this->decodeTunnel != nullptr)
     {
         delete this->decodeTunnel;
         this->decodeTunnel = nullptr;
     }
+    printf("~VT5"); fflush(stdout);
     if (this->schedTunnel != nullptr)
     {
         delete this->schedTunnel;
         this->schedTunnel = nullptr;
     }
-
+    printf("~VT6"); fflush(stdout);
     if (this->clockSchedTunnel != nullptr)
     {
         delete this->clockSchedTunnel;
     }
+    printf("~VT7"); fflush(stdout);
     if (this->vdr != nullptr)
     {
         delete this->vdr;
         this->vdr = nullptr;
     }
-
+    printf("~VT8"); fflush(stdout);
     this->vdc->disablePortBuffers(130, nullptr, nullptr, nullptr);
-
+    printf("~VT9"); fflush(stdout);
     if (this->vdc != nullptr)
     {
         delete this->vdc;
         this->vdc = nullptr;
     }
+    printf("~VT10"); fflush(stdout);
     if (this->sched != nullptr)
     {
         delete this->sched;

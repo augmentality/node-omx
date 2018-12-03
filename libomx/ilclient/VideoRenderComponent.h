@@ -8,4 +8,5 @@ class VideoRenderComponent: public ILComponent
 {
     public:
         explicit VideoRenderComponent(ILClient * client);
+        void flush();
 };

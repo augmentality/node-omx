@@ -4,7 +4,9 @@
 #include "videoBlock.h"
 #include <stdexcept>
 
-NativePlayer::NativePlayer(std::string url)
+
+NativePlayer::NativePlayer(std::string url, std::function<void()> pCompletedFunction):
+    playbackComplete(pCompletedFunction)
 {
     try
     {
@@ -206,6 +208,8 @@ void NativePlayer::playThreadFunc()
         }
         delete block;
     }
+    playbackComplete();
+
 }
 void NativePlayer::setLoop(bool loop)
 {
@@ -214,10 +218,43 @@ void NativePlayer::setLoop(bool loop)
         this->src->setLoop(loop);
     }
 }
+void NativePlayer::waitForCompletion()
+{
+    if (this->audioThread != nullptr)
+    {
+        this->audioThread->waitForCompletion();
+    }
+    if (this->videoThread != nullptr)
+    {
+        this->videoThread->waitForCompletion();
+    }
+}
 NativePlayer::~NativePlayer()
 {
-    this->playing = false;
-    this->playThread.join();
+    printf("~N1\n"); fflush(stdout);
+    clock->changeState(OMX_StateIdle);
+    printf("~N2\n"); fflush(stdout);
+    if (this->playing)
+    {
+        this->playing = false;
+        this->playThread.join();
+    }
+    printf("~N3\n"); fflush(stdout);
+    if (this->src != nullptr)
+    {
+        delete this->src;
+    }
+    printf("~N4\n"); fflush(stdout);
+    if (this->audioThread != nullptr)
+    {
+        delete this->audioThread;
+    }
+    printf("~N5\n"); fflush(stdout);
+    if (this->videoThread != nullptr)
+    {
+        delete this->videoThread;
+    }
+    printf("~N6\n"); fflush(stdout);
     if (frame != nullptr)
     {
         if (frame->frame != nullptr)
@@ -232,6 +269,7 @@ NativePlayer::~NativePlayer()
         }
         delete frame;
     }
+    printf("~N7\n"); fflush(stdout);
     while (prebuffer.size() > 0)
     {
         PrebufferBlock * blk = prebuffer.front();
@@ -250,18 +288,7 @@ NativePlayer::~NativePlayer()
         }
         delete blk;
     }
-    if (this->src != nullptr)
-    {
-        delete this->src;
-    }
-    if (this->audioThread != nullptr)
-    {
-        delete this->audioThread;
-    }
-    if (this->videoThread != nullptr)
-    {
-        delete this->videoThread;
-    }
+    printf("~N8\n"); fflush(stdout);
     if (this->clock != nullptr)
     {
         delete this->clock;
@@ -270,4 +297,5 @@ NativePlayer::~NativePlayer()
     {
         delete this->client;
     }
+    printf("~N9\n"); fflush(stdout);
 }
