@@ -1,7 +1,6 @@
 #pragma once
 
 #include <nan.h>
-#include "libomx/NativePlayer.h"
 #include <stdexcept>
 #include <thread>
 
@@ -11,14 +10,9 @@ class Player : public Nan::ObjectWrap
         static NAN_MODULE_INIT(Init);
         void completePlayback()
         {
-            nativePlayer->waitForCompletion();
             playState = 0;
-            delete nativePlayer;
-            nativePlayer = nullptr;
         }
         int playState = 0;
-
-        NativePlayer * nativePlayer = nullptr;
 
     private:
         std::thread runThread;
