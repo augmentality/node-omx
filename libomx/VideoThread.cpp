@@ -22,17 +22,13 @@ void VideoThread::waitForCompletion()
 {
     waitingForEnd = true;
     {
-        printf("Waiting for video completion\n");
         std::unique_lock <std::mutex> lk(videoPlayingMutex);
     }
-    printf("Flushing buffers\n");
     this->vdc->flush();
     this->vdr->flush();
-    printf("DONE FLUSH\n");
 }
 VideoBlock * VideoThread::dequeue()
 {
-    printf("Video Queue size %d\n", videoQueue.size());
     std::unique_lock<std::mutex> lk(videoQueueMutex);
     if (videoQueue.empty())
     {
@@ -196,7 +192,6 @@ void VideoThread::videoThreadFunc()
             }
             else
             {
-                printf("@");
                 if (waitingForEnd)
                 {
                     playbackComplete = true;
@@ -204,7 +199,6 @@ void VideoThread::videoThreadFunc()
             }
         }
     }
-    printf("SENDING VIDEO EOS\n");
     OMX_BUFFERHEADERTYPE * buff_header = vdc->getInputBuffer(130, 1 /* block */);
     if (buff_header != nullptr)
     {
@@ -214,7 +208,6 @@ void VideoThread::videoThreadFunc()
 
         buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
         vdc->emptyBuffer(buff_header);
-        printf("VIDEO EOS SENT\n");
     }
 }
 void VideoThread::addData(VideoBlock * vb)
@@ -232,11 +225,8 @@ void VideoThread::addData(VideoBlock * vb)
 }
 VideoThread::~VideoThread()
 {
-    printf("~VT1"); fflush(stdout);
     this->playbackComplete = true;
-    printf("~VT2"); fflush(stdout);
     this->videoThread.join();
-    printf("~VT3"); fflush(stdout);
     this->vdc->changeState(OMX_StateIdle);
     // Empty queue
     while(videoQueue.size() > 0)
@@ -246,38 +236,31 @@ VideoThread::~VideoThread()
         delete[] b->data;
         delete b;
     }
-    printf("~VT4"); fflush(stdout);
     if (this->decodeTunnel != nullptr)
     {
         delete this->decodeTunnel;
         this->decodeTunnel = nullptr;
     }
-    printf("~VT5"); fflush(stdout);
     if (this->schedTunnel != nullptr)
     {
         delete this->schedTunnel;
         this->schedTunnel = nullptr;
     }
-    printf("~VT6"); fflush(stdout);
     if (this->clockSchedTunnel != nullptr)
     {
         delete this->clockSchedTunnel;
     }
-    printf("~VT7"); fflush(stdout);
     if (this->vdr != nullptr)
     {
         delete this->vdr;
         this->vdr = nullptr;
     }
-    printf("~VT8"); fflush(stdout);
     this->vdc->disablePortBuffers(130, nullptr, nullptr, nullptr);
-    printf("~VT9"); fflush(stdout);
     if (this->vdc != nullptr)
     {
         delete this->vdc;
         this->vdc = nullptr;
     }
-    printf("~VT10"); fflush(stdout);
     if (this->sched != nullptr)
     {
         delete this->sched;

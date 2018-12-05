@@ -38,7 +38,5 @@ void VideoDecodeComponent::setVideoCompressionFormat(OMX_VIDEO_CODINGTYPE codec,
 
 void VideoDecodeComponent::flush()
 {
-    printf("WAIT FOR EOS\n"); fflush(stdout);
     this->waitForEvent(OMX_EventBufferFlag, 131, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, 10000);
-    printf("VDR: EOS found!\n"); fflush(stdout);
 }

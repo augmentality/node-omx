@@ -20,9 +20,7 @@ void AudioThread::start()
 void AudioThread::waitForCompletion()
 {
     waitingForEnd = true;
-    fflush(stdout);
     {
-        printf("Waiting for audio completion");
         std::unique_lock <std::mutex> lk(audioPlayingMutex);
     }
 }

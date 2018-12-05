@@ -160,7 +160,6 @@ NAN_METHOD(Player::setLoop)
         return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
     bool loop  = info[0]->BooleanValue();
-    printf("SET LOOP: %d", loop);
     obj->nativePlayer->setLoop(loop);
 }
 
