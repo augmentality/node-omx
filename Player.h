@@ -17,12 +17,11 @@ class Player : public Nan::ObjectWrap
             nativePlayer = nullptr;
         }
         int playState = 0;
-
+        Nan::Callback playbackStateCallback;
         NativePlayer * nativePlayer = nullptr;
 
     private:
         std::thread runThread;
-
         explicit Player();
         ~Player();
         static NAN_METHOD(New);

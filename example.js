@@ -3,48 +3,80 @@ const readline = require('readline');
 
 readline.emitKeypressEvents(process.stdin);
 
-const n = new omx.Player();
-n.open('http://movies.casperpanel.com/epicloop.mp4');
-n.play();
-let speed = 1.0;
-setInterval(() =>
+let state = 0;
+async function run()
 {
-    console.log('Playback position: ' + n.getTime());
-}, 1000);
-let paused = false;
-process.stdin.setRawMode(true);
-process.stdin.on('keypress', (str, key) =>
-{
-    if (key.ctrl && key.name === 'q')
+    const n = new omx.Player();
+
+
+    n.onPlaybackState.subscribe((pState) =>
     {
-        process.exit();
-    }
-    else
-    {
-        switch(key.name)
+        state = pState;
+        switch(state)
         {
-            case 'up':
-                speed += 0.01;
-                console.log('Playback speed: ' + speed);
-                n.setSpeed(speed);
+            case 0:
+                console.log('Stopped');
                 break;
-            case 'down':
-                speed -= 0.01;
-                console.log('Playback speed: ' + speed);
-                n.setSpeed(speed);
+            case 1:
+                console.log('File loaded');
                 break;
-            case 'space':
-                if (!paused)
-                {
-                    n.pause();
-                    paused = true;
-                }
-                else
-                {
-                    n.play();
-                    paused = false;
-                }
+            case 2:
+                console.log('Playing');
+                break;
+            case 3:
+                console.log('Paused');
                 break;
         }
-    }
-});
+    });
+
+    await n.open('http://movies.casperpanel.com/epicloop.mp4');
+    n.play();
+
+    setInterval(() =>
+    {
+        if (state > 0)
+        {
+            console.log('Playback position: ' + n.getTime());
+        }
+    }, 1000);
+
+    let speed = 1.0;
+    let paused = false;
+    process.stdin.setRawMode(true);
+    process.stdin.on('keypress', (str, key) =>
+    {
+        if (key.ctrl && key.name === 'q')
+        {
+            process.exit();
+        }
+        else
+        {
+            switch(key.name)
+            {
+                case 'up':
+                    speed += 0.01;
+                    console.log('Playback speed: ' + speed);
+                    n.setSpeed(speed);
+                    break;
+                case 'down':
+                    speed -= 0.01;
+                    console.log('Playback speed: ' + speed);
+                    n.setSpeed(speed);
+                    break;
+                case 'space':
+                    if (!paused)
+                    {
+                        n.pause();
+                        paused = true;
+                    }
+                    else
+                    {
+                        n.play();
+                        paused = false;
+                    }
+                    break;
+            }
+        }
+    });
+}
+run().then({});

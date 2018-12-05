@@ -209,7 +209,6 @@ void NativePlayer::playThreadFunc()
         delete block;
     }
     playbackComplete();
-
 }
 void NativePlayer::setLoop(bool loop)
 {

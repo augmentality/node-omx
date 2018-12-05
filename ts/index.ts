@@ -1,4 +1,6 @@
 import * as cmake from 'node-cmake'
+import {Subject} from 'rxjs/internal/Subject';
+import {PlaybackState} from "./PlaybackState";
 const omx = cmake('node_omx');
 
 export class Player
@@ -7,6 +9,8 @@ export class Player
     private url: string;
     private state: number;
 
+    onPlaybackState: Subject<PlaybackState> = new Subject<PlaybackState>();
+
     constructor()
     {
         this.state = 0;
@@ -14,15 +18,32 @@ export class Player
         this.p = new omx.Player();
     }
 
-    open(url: string)
+    open(url: string): Promise<void>
     {
+        this.url = url;
         if (this.state !== 0)
         {
             throw new Error('URL already open. Stop first or create a new instance.');
         }
-        this.url = url;
-        this.p.loadURL(url);
-        this.state = 1;
+        return new Promise<void>((resolve, reject) =>
+        {
+            try
+            {
+                this.p.loadURL(url, () =>
+                {
+                    this.state = 1;
+                    resolve();
+                }, (state: PlaybackState) =>
+                {
+                    this.onPlaybackState.next(state);
+                });
+            }
+            catch (err)
+            {
+
+            }
+        });
+
     }
 
     play()

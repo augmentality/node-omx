@@ -1,22 +1,34 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-var cmake = require("node-cmake");
-var omx = cmake('node_omx');
-var Player = /** @class */ (function () {
-    function Player() {
+const cmake = require("node-cmake");
+const Subject_1 = require("rxjs/internal/Subject");
+const omx = cmake('node_omx');
+class Player {
+    constructor() {
+        this.onPlaybackState = new Subject_1.Subject();
         this.state = 0;
         this.url = '';
         this.p = new omx.Player();
     }
-    Player.prototype.open = function (url) {
+    open(url) {
+        this.url = url;
         if (this.state !== 0) {
             throw new Error('URL already open. Stop first or create a new instance.');
         }
-        this.url = url;
-        this.p.loadURL(url);
-        this.state = 1;
-    };
-    Player.prototype.play = function () {
+        return new Promise((resolve, reject) => {
+            try {
+                this.p.loadURL(url, () => {
+                    this.state = 1;
+                    resolve();
+                }, (state) => {
+                    this.onPlaybackState.next(state);
+                });
+            }
+            catch (err) {
+            }
+        });
+    }
+    play() {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
@@ -28,16 +40,16 @@ var Player = /** @class */ (function () {
         }
         this.p.play();
         this.state = 2;
-    };
-    Player.prototype.stop = function () {
+    }
+    stop() {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
         this.p.stop();
         this.p = null;
         this.state = 0;
-    };
-    Player.prototype.pause = function () {
+    }
+    pause() {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
@@ -46,26 +58,25 @@ var Player = /** @class */ (function () {
         }
         this.p.pause();
         this.state = 3;
-    };
-    Player.prototype.setSpeed = function (factor) {
+    }
+    setSpeed(factor) {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
         this.p.setSpeed(factor);
-    };
-    Player.prototype.setLoop = function (loop) {
+    }
+    setLoop(loop) {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
         this.p.setLoop(loop);
-    };
-    Player.prototype.getTime = function () {
+    }
+    getTime() {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
         return this.p.getTime();
-    };
-    return Player;
-}());
+    }
+}
 exports.Player = Player;
 //# sourceMappingURL=index.js.map
