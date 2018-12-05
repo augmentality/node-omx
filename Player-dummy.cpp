@@ -76,7 +76,7 @@ NAN_METHOD(Player::loadURL)
     if (info.Length() > 0)
     {
         v8::String::Utf8Value param1(info[0]->ToString());
-        printf("node-omx - unsupported platform - placeholder: New URL loaded: %s", *param1);
+        printf("node-omx - unsupported platform - placeholder: New URL loaded: %s\n", *param1);
         obj->playState = 1;
     }
     else
@@ -96,7 +96,7 @@ NAN_METHOD(Player::play)
     {
         return Nan::ThrowError(Nan::New("Media already playing").ToLocalChecked());
     }
-    printf("node-omx - unsupported platform - placeholder: Play");
+    printf("node-omx - unsupported platform - placeholder: Play\n");
     obj->playState = 2;
 }
 
@@ -107,7 +107,7 @@ NAN_METHOD(Player::pause)
     {
         return Nan::ThrowError(Nan::New("Stream is not started").ToLocalChecked());
     }
-    printf("node-omx - unsupported platform - placeholder: Pause");
+    printf("node-omx - unsupported platform - placeholder: Pause\n");
     obj->playState = 3;
 }
 
@@ -123,7 +123,7 @@ NAN_METHOD(Player::setSpeed)
         return Nan::ThrowError(Nan::New("Speed not provided").ToLocalChecked());
     }
     double speed = info[0]->NumberValue();
-    printf("node-omx - unsupported platform - placeholder: Set speed to %f", speed);
+    printf("node-omx - unsupported platform - placeholder: Set speed to %f\n", speed);
 }
 
 NAN_METHOD(Player::setLoop)
@@ -134,7 +134,7 @@ NAN_METHOD(Player::setLoop)
         return Nan::ThrowError(Nan::New("Loop parameter not provided").ToLocalChecked());
     }
     bool loop  = info[0]->BooleanValue();
-    printf("node-omx - unsupported platform - Set loop: %d", loop);
+    printf("node-omx - unsupported platform - Set loop: %d\n", loop);
 }
 
 NAN_METHOD(Player::getTime)
@@ -145,7 +145,7 @@ NAN_METHOD(Player::getTime)
         return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
     }
     float time = 0.0;
-    printf("node-omx - unsupported platform - placeholder: getTime (returned 0.0 seconds)");
+    printf("node-omx - unsupported platform - placeholder: getTime (returned 0.0 seconds)\n");
     info.GetReturnValue().Set(time);
 }
 

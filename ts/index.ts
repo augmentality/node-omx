@@ -11,7 +11,7 @@ export class Player
     {
         this.state = 0;
         this.url = '';
-        this.p = null;
+        this.p = new omx.Player();
     }
 
     open(url: string)
@@ -21,7 +21,7 @@ export class Player
             throw new Error('URL already open. Stop first or create a new instance.');
         }
         this.url = url;
-        this.p = new omx.Player(url);
+        this.p.loadURL(url);
         this.state = 1;
     }
 

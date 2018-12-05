@@ -4,7 +4,7 @@ const readline = require('readline');
 readline.emitKeypressEvents(process.stdin);
 
 const n = new omx.Player();
-n.loadURL('http://movies.casperpanel.com/epicloop.mp4');
+n.open('http://movies.casperpanel.com/epicloop.mp4');
 n.play();
 let speed = 1.0;
 setInterval(() =>
