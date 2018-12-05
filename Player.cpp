@@ -66,13 +66,12 @@ struct runPlayerData
 
 NAN_INLINE void playbackCompletedEvent (uv_work_t* req)
 {
-    printf("END OF LINE");
+
 }
 NAN_INLINE void videoPlaybackComplete (uv_work_t* req)
 {
     runPlayerData * data = static_cast<runPlayerData*>(req->data);
     Player * objRef = data->player;
-    printf("PLAYVIDEO OBJECT REF: %d\n", objRef);
     objRef->completePlayback();
 }
 NAN_METHOD(Player::loadURL)

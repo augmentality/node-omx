@@ -1,4 +1,4 @@
-#include "Player.h"
+#include "Player-dummy.h"
 #include <string>
 
 using v8::String;
@@ -62,13 +62,12 @@ struct runPlayerData
 
 NAN_INLINE void playbackCompletedEvent (uv_work_t* req)
 {
-    printf("END OF LINE");
+
 }
 NAN_INLINE void videoPlaybackComplete (uv_work_t* req)
 {
     runPlayerData * data = static_cast<runPlayerData*>(req->data);
     Player * objRef = data->player;
-    printf("PLAYVIDEO OBJECT REF: %d\n", objRef);
     objRef->completePlayback();
 }
 NAN_METHOD(Player::loadURL)
@@ -97,7 +96,7 @@ NAN_METHOD(Player::play)
     {
         return Nan::ThrowError(Nan::New("Media already playing").ToLocalChecked());
     }
-    printf("node-omx - unsupported platform - placeholder: Play", *param1);
+    printf("node-omx - unsupported platform - placeholder: Play");
     obj->playState = 2;
 }
 
@@ -108,7 +107,7 @@ NAN_METHOD(Player::pause)
     {
         return Nan::ThrowError(Nan::New("Stream is not started").ToLocalChecked());
     }
-    printf("node-omx - unsupported platform - placeholder: Pause", *param1);
+    printf("node-omx - unsupported platform - placeholder: Pause");
     obj->playState = 3;
 }
 
@@ -146,7 +145,7 @@ NAN_METHOD(Player::getTime)
         return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
     }
     float time = 0.0;
-    printf("node-omx - unsupported platform - placeholder: getTime (returned 0.0 seconds)", *param1);
+    printf("node-omx - unsupported platform - placeholder: getTime (returned 0.0 seconds)");
     info.GetReturnValue().Set(time);
 }
 

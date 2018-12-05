@@ -5,6 +5,7 @@
   "scripts": {
     "configure": "ncmake configure",
     "build": "ncmake build",
+    "build-ts": "tsc",
     "install": "ncmake configure && ncmake build"
   },
   "dependencies": {
@@ -13,5 +14,7 @@
     "node-cmake": "^2.5.1"
   },
   "devDependencies": {
+    "@types/node": "^10.12.12",
+    "typescript": "^3.2.1"
   }
 }
