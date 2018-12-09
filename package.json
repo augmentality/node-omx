@@ -1,6 +1,6 @@
 {
   "name": "@augmentality/node-omx",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "scripts": {
     "configure": "ncmake configure",
@@ -8,6 +8,7 @@
     "build-ts": "tsc",
     "install": "ncmake configure && ncmake build"
   },
+  "license" : "GPL-2.0-only",
   "dependencies": {
     "bindings": "^1.3.1",
     "nan": "^2.11.1",
