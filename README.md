@@ -1,5 +1,9 @@
 # node-omx
 
+[![npm version](https://badge.fury.io/js/%40augmentality%2Fnode-omx.svg)](https://badge.fury.io/js/%40caspertech%2Fnode-omx)
+[![Known Vulnerabilities](https://snyk.io/test/npm/@augmentality/node-omx/badge.svg)](https://snyk.io/test/npm/@augmentality/node-omx)
+[![Dependencies](https://david-dm.org/Augmentality/node-omx.svg)](https://david-dm.org/Augmentality/node-omx.svg)
+
 > A Node.JS video player for the Raspberry Pi (and other devices using Broadcom's OpenMax-based Multi-Media Abstraction Layer API)
 
 This is a compiled module for NodeJS which provides hardware-accelerated video and audio playback on the Pi. Everything is built-in, it doesn't shell out to other applications.
@@ -18,7 +22,7 @@ npm install --save @augmentality/node-omx
 * Seamless looping with a/v sync
 * Pause / Resume
 * Get playback time
-* ~~Callbacks for play state~~ (Coming Soon)
+* Callbacks for play state
 * Seamless switching between videos with multiple instances
 * Supports mp4, mkv, mov, or any container supported by ffmpeg
 
@@ -39,60 +43,89 @@ For convenience, on unsupported platforms, the module will still build and will 
 Javascript
 
 ```javascript
-const omx = require('node-omx');
+const omx = require('@augmentality/node-omx');
 const readline = require('readline');
 
 readline.emitKeypressEvents(process.stdin);
 
-const n = new omx.Player();
-n.loadURL('http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4');
-n.play();
-n.setLoop(true);
-let speed = 1.0;
-setInterval(() =>
+let state = 0;
+async function run()
 {
-    console.log('Playback position: ' + n.getTime());
-}, 1000);
-let paused = false;
-process.stdin.setRawMode(true);
-process.stdin.on('keypress', (str, key) =>
-{
-    if (key.ctrl && key.name === 'q')
+    const n = new omx.Player();
+
+
+    n.onPlaybackState.subscribe((pState) =>
     {
-        process.exit();
-    }
-    else
-    {
-        switch(key.name)
+        state = pState;
+        switch(state)
         {
-            case 'up':
-                speed += 0.01;
-                console.log('Playback speed: ' + speed);
-                n.setSpeed(speed);
+            case 0:
+                console.log('Stopped');
                 break;
-            case 'down':
-                speed -= 0.01;
-                console.log('Playback speed: ' + speed);
-                n.setSpeed(speed);
+            case 1:
+                console.log('File loaded');
                 break;
-            case 'space':
-                if (!paused)
-                {
-                    n.pause();
-                    paused = true;
-                }
-                else
-                {
-                    n.play();
-                    paused = false;
-                }
+            case 2:
+                console.log('Playing');
                 break;
-             case 's':
-                n.stop();
+            case 3:
+                console.log('Paused');
                 break;
         }
-    }
-});
+    });
+
+    await n.open('http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4');
+    n.play();
+    n.setLoop(true); // Enable seamless looping
+
+    setInterval(() =>
+    {
+        if (state > 0)
+        {
+            console.log('Playback position: ' + n.getTime());
+        }
+    }, 1000);
+
+    let speed = 1.0;
+    let paused = false;
+    process.stdin.setRawMode(true);
+    process.stdin.on('keypress', (str, key) =>
+    {
+        if (key.ctrl && key.name === 'q')
+        {
+            process.exit();
+        }
+        else
+        {
+            switch(key.name)
+            {
+                case 'up':
+                    speed += 0.01;
+                    console.log('Playback speed: ' + speed);
+                    n.setSpeed(speed);
+                    break;
+                case 'down':
+                    speed -= 0.01;
+                    console.log('Playback speed: ' + speed);
+                    n.setSpeed(speed);
+                    break;
+                case 'space':
+                    if (!paused)
+                    {
+                        n.pause();
+                        paused = true;
+                    }
+                    else
+                    {
+                        n.play();
+                        paused = false;
+                    }
+                    break;
+            }
+        }
+    });
+}
+run().then({});
 ```
 
 ## Caveats

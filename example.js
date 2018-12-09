@@ -29,7 +29,7 @@ async function run()
         }
     });
 
-    await n.open('http://movies.casperpanel.com/epicloop.mp4');
+    await n.open('http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4');
     n.play();
 
     setInterval(() =>

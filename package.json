@@ -17,5 +17,9 @@
   "devDependencies": {
     "@types/node": "^10.12.12",
     "typescript": "^3.2.1"
+  },
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/augmentality/node-omx.git"
   }
 }
