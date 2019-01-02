@@ -22,6 +22,6 @@ var PlaybackState;
     PlaybackState[PlaybackState["Unloaded"] = 0] = "Unloaded";
     PlaybackState[PlaybackState["Ready"] = 1] = "Ready";
     PlaybackState[PlaybackState["Playing"] = 2] = "Playing";
-    PlaybackState[PlaybackState["Paused"] = 2] = "Paused";
+    PlaybackState[PlaybackState["Paused"] = 3] = "Paused";
 })(PlaybackState = exports.PlaybackState || (exports.PlaybackState = {}));
 //# sourceMappingURL=PlaybackState.js.map
