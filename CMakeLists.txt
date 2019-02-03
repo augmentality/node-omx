@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 14)
 include(NodeJS.cmake)
 nodejs_init()
 
-if(EXISTS "/opt/vc/include/bcm_host.h")
+if(EXISTS "/opt/vc/include/bcm_host.h" OR EXISTS "/usr/include/bcm_host.h")
     add_compile_definitions(HAVE_LIBOPENMAX=2 OMX OMX_SKIP64BIT USE_EXTERNAL_OMX HAVE_LIBBCM_HOST USE_EXTERNAL_LIBBCM_HOST USE_VCHIQ_ARM)
     add_subdirectory( libomx )
     add_nodejs_module(${PROJECT_NAME} node-omx.cpp Player.cpp)
