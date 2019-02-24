@@ -50,6 +50,7 @@ Player::~Player()
     if (nativePlayer != nullptr)
     {
         delete nativePlayer;
+        nativePlayer = nullptr;
     }
 }
 
@@ -115,7 +116,11 @@ NAN_INLINE void loadVideo (uv_work_t* req)
     //Nan::HandleScope scope;
     runPlayerData * data = static_cast<runPlayerData*>(req->data);
     Player * objRef = data->player;
-
+    if (objRef->nativePlayer != nullptr)
+    {
+        delete objRef->nativePlayer;
+        objRef->nativePlayer = nullptr;
+    }
     objRef->nativePlayer = new NativePlayer(data->url, [objRef]()
     {
         playbackFinishedData * data = new playbackFinishedData();
@@ -257,7 +262,11 @@ NAN_METHOD(Player::stop)
     {
         return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
-    delete obj->nativePlayer;
+    if (obj->nativePlayer != nullptr)
+    {
+        delete obj->nativePlayer;
+        obj->nativePlayer = nullptr;
+    }
     obj->playState = 0;
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(0)
