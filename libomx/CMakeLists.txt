@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.7)
 project(libomx)
 set(CMAKE_BUILD_TYPE Debug)
 find_package(PkgConfig)
 IF (UNIX)
+    set(ENV{PKG_CONFIG_PATH} "/opt/vc/lib/pkgconfig/:$ENV{PKG_CONFIG_PATH}")
     pkg_search_module(BRCMEGL REQUIRED brcmegl)
 ENDIF(UNIX)
 pkg_search_module(LIBAVFORMAT REQUIRED libavformat)
@@ -16,6 +17,3 @@ add_library(libomx NativePlayer.cpp NativePlayer.h VideoThread.cpp VideoThread.h
 
 target_include_directories(libomx SYSTEM PUBLIC ${BRCMEGL_INCLUDE_DIRS} ${LIBAVFORMAT_INCLUDE_DIRS} ${LIBAVCODEC_INCLUDE_DIRS} ${LIBAVUTIL_INCLUDE_DIRS} ${LIBSWRESAMPLE_INCLUDE_DIRS})
 target_link_libraries(libomx -lpthread -lopenmaxil ${BRCMEGL_LIBRARIES} ${LIBAVFORMAT_LIBRARIES} ${LIBAVCODEC_LIBRARIES} ${LIBAVUTIL_LIBRARIES} ${LIBSWRESAMPLE_LIBRARIES} )
-
-
-

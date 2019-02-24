@@ -29,7 +29,7 @@ npm install --save @augmentality/node-omx
 ## Prerequisites
 
 * Working C++ toolchain (apt-get install build-essential)
-* ffmpeg (apt-get install libavcodec-dev)
+* ffmpeg (apt-get install libavutil-dev libavcodec-dev libswresample-dev libavformat-dev)
 * cmake (apt-get install cmake)
 
 ## Supported Platforms
