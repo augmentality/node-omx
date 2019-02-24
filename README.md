@@ -28,9 +28,13 @@ npm install --save @augmentality/node-omx
 
 ## Prerequisites
 
-* Working C++ toolchain (apt-get install build-essential)
-* ffmpeg (apt-get install libavutil-dev libavcodec-dev libswresample-dev libavformat-dev)
-* cmake (apt-get install cmake)
+Please check npm -v to make sure you have npm@6.8.0 or higher. 
+
+For raspbian:
+
+```bash
+apt-get install build-essential cmake libavutil-dev libavcodec-dev libswresample-dev libavformat-dev
+```
 
 ## Supported Platforms
 
