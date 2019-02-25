@@ -293,7 +293,10 @@ VideoThread::~VideoThread()
         stop();
     }
     this->playbackComplete = true;
-    this->videoThread.join();
+    if (this->videoThread.joinable())
+    {
+        this->videoThread.join();
+    }
     this->vdc->changeState(OMX_StateIdle);
     // Empty queue
     while(videoQueue.size() > 0)

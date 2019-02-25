@@ -290,8 +290,10 @@ AudioThread::~AudioThread()
         stop();
     }
     this->playbackComplete = true;
-    this->audioThread.join();
-
+    if (this->audioThread.joinable())
+    {
+        this->audioThread.join();
+    }
     // Empty queue
     while(audioQueue.size() > 0)
     {

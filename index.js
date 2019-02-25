@@ -62,9 +62,9 @@ class Player {
         if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
+        this.state = 0;
         this.p.stop();
         this.p = null;
-        this.state = 0;
     }
     pause() {
         if (this.state === 0 || this.p === null) {

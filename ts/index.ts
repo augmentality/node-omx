@@ -90,9 +90,9 @@ export class Player
         {
             throw new Error('No file loaded');
         }
+        this.state = 0;
         this.p.stop();
         this.p = null;
-        this.state = 0;
     }
 
     pause()
