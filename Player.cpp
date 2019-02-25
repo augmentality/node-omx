@@ -90,8 +90,10 @@ NAN_INLINE void playbackCompletedEvent (uv_work_t* req)
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(0)
     };
-
-    data->player->playbackStateCallback.Call(1, argv);
+    if (!data->player->playbackStateCallback.IsEmpty())
+    {
+        data->player->playbackStateCallback.Call(1, argv);
+    }
     delete data;
 }
 NAN_INLINE void fileLoadedEvent (uv_work_t* req)
@@ -102,8 +104,14 @@ NAN_INLINE void fileLoadedEvent (uv_work_t* req)
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(1)
     };
-    data->player->playbackStateCallback.Call(1, argv);
-    data->loadCallback.Call(0, 0);
+    if (!data->player->playbackStateCallback.IsEmpty())
+    {
+        data->player->playbackStateCallback.Call(1, argv);
+    }
+    if (!data->loadCallback.IsEmpty())
+    {
+        data->loadCallback.Call(0, 0);
+    }
     delete data;
 }
 NAN_INLINE void completePlayback (uv_work_t* req)
@@ -180,7 +188,10 @@ NAN_METHOD(Player::play)
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(2)
     };
-    obj->playbackStateCallback.Call(1, argv);
+    if (!obj->playbackStateCallback.IsEmpty())
+    {
+        obj->playbackStateCallback.Call(1, argv);
+    }
 }
 
 NAN_METHOD(Player::pause)
@@ -190,16 +201,19 @@ NAN_METHOD(Player::pause)
     {
         return Nan::ThrowError(Nan::New("Stream is not started").ToLocalChecked());
     }
-        if (obj->nativePlayer == nullptr)
-        {
-            return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
-        }
+    if (obj->nativePlayer == nullptr)
+    {
+        return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
+    }
     obj->nativePlayer->pause();
     obj->playState = 3;
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(3)
     };
-    obj->playbackStateCallback.Call(1, argv);
+    if (!obj->playbackStateCallback.IsEmpty())
+    {
+        obj->playbackStateCallback.Call(1, argv);
+    }
 }
 
 NAN_METHOD(Player::setSpeed)
@@ -256,7 +270,7 @@ NAN_METHOD(Player::stop)
     Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.This());
     if (obj->playState < 1)
     {
-       return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
+        return Nan::ThrowError(Nan::New("No media loaded").ToLocalChecked());
     }
     if (obj->nativePlayer == nullptr)
     {
@@ -271,6 +285,8 @@ NAN_METHOD(Player::stop)
     v8::Local<v8::Value> argv[] = {
             Nan::New<v8::Number>(0)
     };
-    obj->playbackStateCallback.Call(1, argv);
+    if (!obj->playbackStateCallback.IsEmpty())
+    {
+        obj->playbackStateCallback.Call(1, argv);
+    }
 }
-
