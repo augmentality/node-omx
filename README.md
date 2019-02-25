@@ -8,6 +8,16 @@
 
 This is a compiled module for NodeJS which provides hardware-accelerated video and audio playback on the Pi. Everything is built-in, it doesn't shell out to other applications.
 
+## Prerequisites
+
+Please check npm -v to make sure you have npm@6.8.0 or higher. The version of npm included with Raspbian is, of course, hopelessly out of date and can't compile this module.
+
+For raspbian:
+
+```bash
+apt-get install build-essential cmake libavutil-dev libavcodec-dev libswresample-dev libavformat-dev
+```
+
 ## Install
 
 ```bash
@@ -25,12 +35,6 @@ npm install --save @augmentality/node-omx
 * Callbacks for play state
 * Seamless switching between videos with multiple instances
 * Supports mp4, mkv, mov, or any container supported by ffmpeg
-
-## Prerequisites
-
-* Working C++ toolchain (apt-get install build-essential)
-* ffmpeg (apt-get install libavutil-dev libavcodec-dev libswresample-dev libavformat-dev)
-* cmake (apt-get install cmake)
 
 ## Supported Platforms
 
