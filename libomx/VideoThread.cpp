@@ -105,9 +105,43 @@ void VideoThread::waitForBuffer()
         });
     }
 }
-
+void VideoThread::stop()
+{
+    waitForBuffer();
+    {
+        waitingForEnd = true;
+        std::unique_lock<std::mutex> lk(videoQueueMutex);
+        while(videoQueue.size() > 0)
+        {
+            VideoBlock * b = videoQueue.front();
+            videoQueue.pop();
+            if (b != nullptr)
+            {
+                delete[] b->data;
+                delete b;
+            }
+        }
+        videoQueue.push(nullptr);
+        bufferReady = false;
+        videoReady.notify_one();
+    }
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        while (threadRunning)
+        {
+            playThreadFinished.wait_for(lk,  std::chrono::milliseconds(100), [&]()
+            {
+                return !threadRunning;
+            });
+        }
+    }
+}
 void VideoThread::videoThreadFunc()
 {
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        threadRunning = true;
+    }
     this->vdc->changeState(OMX_StateExecuting);
     OMX_BUFFERHEADERTYPE *buf = nullptr;
     int port_settings_changed = 0;
@@ -228,6 +262,11 @@ void VideoThread::videoThreadFunc()
         buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
         vdc->emptyBuffer(buff_header);
     }
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        playThreadFinished.notify_one();
+        threadRunning = false;
+    }
 }
 void VideoThread::addData(VideoBlock * vb)
 {
@@ -244,6 +283,15 @@ void VideoThread::addData(VideoBlock * vb)
 }
 VideoThread::~VideoThread()
 {
+    bool isRunning = false;
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        isRunning = threadRunning;
+    }
+    if (isRunning)
+    {
+        stop();
+    }
     this->playbackComplete = true;
     this->videoThread.join();
     this->vdc->changeState(OMX_StateIdle);
@@ -252,8 +300,11 @@ VideoThread::~VideoThread()
     {
         VideoBlock * b = videoQueue.front();
         videoQueue.pop();
-        delete[] b->data;
-        delete b;
+        if (b != nullptr)
+        {
+            delete[] b->data;
+            delete b;
+        }
     }
     if (this->decodeTunnel != nullptr)
     {

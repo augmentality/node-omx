@@ -38,10 +38,11 @@ public:
     void start();
     void addData(AudioBlock * block);
     void waitForCompletion();
+    void stop();
 private:
     bool waitingForEnd = false;
     bool playbackComplete = false;
-
+    bool threadRunning = false;
     void audioThreadFunc();
     void waitForBuffer();
     AudioBlock * dequeue();
@@ -55,6 +56,8 @@ private:
     std::mutex audioPlayingMutex;
     std::mutex audioQueueMutex;
     std::condition_variable audioReady;
+    std::mutex syncMutex;
+    std::condition_variable playThreadFinished;
     std::queue<AudioBlock *> audioQueue;
     std::condition_variable readyForData;
     std::mutex readyForDataMutex;

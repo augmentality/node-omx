@@ -43,8 +43,46 @@ void AudioThread::waitForCompletion()
         std::unique_lock <std::mutex> lk(audioPlayingMutex);
     }
 }
+void AudioThread::stop()
+{
+    waitForBuffer();
+    {
+        waitingForEnd = true;
+        std::unique_lock<std::mutex> lk(audioQueueMutex);
+
+        // Empty queue
+        while(audioQueue.size() > 0)
+        {
+            AudioBlock * b = audioQueue.front();
+            audioQueue.pop();
+            if (b != nullptr)
+            {
+                delete[] b->data;
+                delete b;
+            }
+        }
+
+        audioQueue.push(nullptr);
+        bufferReady = false;
+        audioReady.notify_one();
+    }
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        while (threadRunning)
+        {
+            playThreadFinished.wait_for(lk,  std::chrono::milliseconds(100), [&]()
+            {
+                return !threadRunning;
+            });
+        }
+    }
+}
 void AudioThread::audioThreadFunc()
 {
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        threadRunning = true;
+    }
     this->arc->changeState(OMX_StateExecuting);
     {
         std::unique_lock<std::mutex> lk(audioPlayingMutex);
@@ -165,6 +203,11 @@ void AudioThread::audioThreadFunc()
         buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
         arc->emptyBuffer(buff_header);
     }
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        playThreadFinished.notify_one();
+        threadRunning = false;
+    }
 }
 
 AudioBlock * AudioThread::dequeue()
@@ -237,6 +280,15 @@ void AudioThread::addData(AudioBlock * ab)
 }
 AudioThread::~AudioThread()
 {
+    bool isRunning = false;
+    {
+        std::unique_lock<std::mutex> lk(syncMutex);
+        isRunning = threadRunning;
+    }
+    if (isRunning)
+    {
+        stop();
+    }
     this->playbackComplete = true;
     this->audioThread.join();
 
@@ -245,8 +297,11 @@ AudioThread::~AudioThread()
     {
         AudioBlock * b = audioQueue.front();
         audioQueue.pop();
-        delete[] b->data;
-        delete b;
+        if (b != nullptr)
+        {
+            delete[] b->data;
+            delete b;
+        }
     }
 
     if (this->clockAudioTunnel != nullptr)

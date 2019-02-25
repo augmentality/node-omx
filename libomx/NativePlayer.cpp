@@ -177,10 +177,10 @@ PrebufferBlock * NativePlayer::getNextBlock(bool fromPrebuffer)
 void NativePlayer::playThreadFunc()
 {
     clock->changeState(OMX_StateExecuting);
-    playing = true;
+    this->playing = true;
     playState = 1;
     PrebufferBlock * block = getNextBlock(true);
-    while(block != nullptr && playing)
+    while(block != nullptr && this->playing)
     {
         if (block->video)
         {
@@ -249,6 +249,14 @@ void NativePlayer::waitForCompletion()
 }
 NativePlayer::~NativePlayer()
 {
+	if (this->audioThread != nullptr)
+    {
+        this->audioThread->stop();
+    }
+    if (this->videoThread != nullptr)
+    {
+        this->videoThread->stop();
+    }
     clock->changeState(OMX_StateIdle);
     if (this->playing)
     {
