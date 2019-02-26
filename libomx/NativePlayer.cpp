@@ -25,83 +25,48 @@
 
 
 NativePlayer::NativePlayer(std::string url, std::function<void()> pCompletedFunction):
-    playbackComplete(pCompletedFunction)
+    playbackComplete(pCompletedFunction),
+    playerURL(url)
 {
-    try
-    {
-        src = new FFSource(url);
-    }
-    catch(FFException e)
-    {
-        throw std::runtime_error(e.errorMessage);
-    }
-    if (this->src->hasVideo && this->src->codingType != OMX_VIDEO_CodingAVC)
-    {
-        this->src->hasVideo = false;
-    }
-    if (!this->src->hasVideo && !this->src->hasAudio)
-    {
-        delete src;
-        throw std::runtime_error(std::string("No playable streams"));
-    }
-
-    this->client = new ILClient();
-
-    this->clock = new ClockComponent(client);
-    this->clock->setTimeScale(1.0);
-
-    if (src->hasAudio)
-    {
-        this->audioThread = new AudioThread(this->client, this->clock, this->src);
-    }
-    if (src->hasVideo)
-    {
-        this->videoThread = new VideoThread(this->client, this->clock, this->src);
-    }
-
-    // Prebuffer some frames
-    for (int x = 0; x < 100; x++)
-    {
-        prebuffer.push(getNextBlock(false));
-    }
+    controlThread = std::thread(&NativePlayer::controlThreadFunc, this);
 }
 void NativePlayer::play()
 {
-    if (playState == 2)
-    {
-        clock->changeState(OMX_StateExecuting);
-        this->setSpeed(playSpeed);
-        playState = 1;
-    }
-    else if (playState == 0)
-    {
-        if (this->audioThread != nullptr)
-        {
-            this->audioThread->start();
-        }
-        if (this->videoThread != nullptr)
-        {
-            this->videoThread->start();
-        }
-        playThread = std::thread(&NativePlayer::playThreadFunc, this);
-    }
+    ControlQueueCommand * cmd = new ControlQueueCommand();
+    cmd->commandType = ControlQueueCommandType::Play;
+    std::unique_lock<std::mutex> lk(controlMutex);
+    controlCommandQueue.push(cmd);
+    controlCommandReady.notify_one();
 }
 void NativePlayer::pause()
 {
-    if (playState == 1)
-    {
-        playState = 2;
-        this->clock->setTimeScale(0.0f);
-        clock->changeState(OMX_StateIdle);
-    }
+    ControlQueueCommand * cmd = new ControlQueueCommand();
+    cmd->commandType = ControlQueueCommandType::Pause;
+    std::unique_lock<std::mutex> lk(controlMutex);
+    controlCommandQueue.push(cmd);
+    controlCommandReady.notify_one();
 }
 void NativePlayer::setSpeed(float scale)
 {
-    playSpeed = scale;
-    this->clock->setTimeScale(scale);
+    ControlQueueCommand * cmd = new ControlQueueCommand();
+    cmd->commandType = ControlQueueCommandType::SetSpeed;
+    cmd->floatData = scale;
+    std::unique_lock<std::mutex> lk(controlMutex);
+    controlCommandQueue.push(cmd);
+    controlCommandReady.notify_one();
+}
+void NativePlayer::setLoop(bool loop)
+{
+    ControlQueueCommand * cmd = new ControlQueueCommand();
+    cmd->commandType = ControlQueueCommandType::SetLoop;
+    cmd->boolData = loop;
+    std::unique_lock<std::mutex> lk(controlMutex);
+    controlCommandQueue.push(cmd);
+    controlCommandReady.notify_one();
 }
 double NativePlayer::getTime()
 {
+    std::unique_lock<std::mutex> lk(controlMutex);
     return clock->getTime();
 }
 PrebufferBlock * NativePlayer::getNextBlock(bool fromPrebuffer)
@@ -174,82 +139,113 @@ PrebufferBlock * NativePlayer::getNextBlock(bool fromPrebuffer)
         return prebuf;
     }
 }
-void NativePlayer::playThreadFunc()
+void NativePlayer::controlThreadFunc()
 {
-    clock->changeState(OMX_StateExecuting);
-    this->playing = true;
-    playState = 1;
-    PrebufferBlock * block = getNextBlock(true);
-    while(block != nullptr && this->playing)
+    try
     {
-        if (block->video)
-        {
-            if (this->videoThread != nullptr)
-            {
-                this->videoThread->addData((VideoBlock *)block->block);
-            }
-            else
-            {
-                VideoBlock * vb = (VideoBlock *)block->block;
-                delete[] vb->data;
-                delete vb;
-            }
-        }
-        else
-        {
-            if (this->audioThread != nullptr)
-            {
-                this->audioThread->addData((AudioBlock *)block->block);
-            }
-            else
-            {
-                AudioBlock * ab = (AudioBlock *)block->block;
-                delete[] ab->data;
-                delete ab;
-            }
-        }
-        delete block;
-        block = getNextBlock(true);
+        src = new FFSource(playerURL);
     }
-    if (block != nullptr)
+    catch(FFException e)
     {
-        if (block->video)
-        {
-            VideoBlock * vb = (VideoBlock *)block->block;
-            delete[] vb->data;
-            delete vb;
-        }
-        else
-        {
-            AudioBlock * ab = (AudioBlock *)block->block;
-            delete[] ab->data;
-            delete ab;
-        }
-        delete block;
+        throw std::runtime_error(e.errorMessage);
     }
-    playbackComplete();
-}
-void NativePlayer::setLoop(bool loop)
-{
-    if (this->src != nullptr)
+    if (this->src->hasVideo && this->src->codingType != OMX_VIDEO_CodingAVC)
     {
-        this->src->setLoop(loop);
+        this->src->hasVideo = false;
     }
-}
-void NativePlayer::waitForCompletion()
-{
+    if (!this->src->hasVideo && !this->src->hasAudio)
+    {
+        delete src;
+        throw std::runtime_error(std::string("No playable streams"));
+    }
+
+    this->client = new ILClient();
+
+    this->clock = new ClockComponent(client);
+    this->clock->setTimeScale(1.0);
+
+    if (src->hasAudio)
+    {
+        this->audioThread = new AudioThread(this->client, this->clock, this->src);
+    }
+    if (src->hasVideo)
+    {
+        this->videoThread = new VideoThread(this->client, this->clock, this->src);
+    }
+
+    // Prebuffer some frames
+    for (int x = 0; x < 100; x++)
+    {
+        prebuffer.push(getNextBlock(false));
+    }
+
+    while(this->nativePlayerActive)
+    {
+        std::unique_lock<std::mutex> lk(controlMutex);
+        while (this->nativePlayerActive && controlCommandQueue.empty())
+        {
+            if (controlCommandQueue.empty() && !this->nativePlayerActive)
+            {
+                break;
+            }
+            controlCommandReady.wait_for(lk,  std::chrono::milliseconds(100), [&]()
+            {
+                return !controlCommandQueue.empty();
+            });
+        }
+        if (!controlCommandQueue.empty())
+        {
+            ControlQueueCommand * cmd = controlCommandQueue.front();
+            controlCommandQueue.pop();
+            switch(cmd->commandType)
+            {
+                case ControlQueueCommandType::Pause:
+                    if (playState == 1)
+                    {
+                        playState = 2;
+                        this->clock->setTimeScale(0.0f);
+                        clock->changeState(OMX_StateIdle);
+                    }
+                    break;
+                case ControlQueueCommandType::SetSpeed:
+                    playSpeed = cmd->floatData;
+                    this->clock->setTimeScale(playSpeed);
+                    break;
+                case ControlQueueCommandType::Play:
+                    if (playState == 2)
+                    {
+                        clock->changeState(OMX_StateExecuting);
+                        this->setSpeed(playSpeed);
+                        playState = 1;
+                    }
+                    else if (playState == 0)
+                    {
+                        if (this->audioThread != nullptr)
+                        {
+                            this->audioThread->start();
+                        }
+                        if (this->videoThread != nullptr)
+                        {
+                            this->videoThread->start();
+                        }
+                        playThread = std::thread(&NativePlayer::playThreadFunc, this);
+                    }
+                    break;
+                case ControlQueueCommandType::SetLoop:
+                    if (this->src != nullptr)
+                    {
+                        this->src->setLoop(cmd->boolData);
+                    }
+                    break;
+                case ControlQueueCommandType::Stop:
+                    this->nativePlayerActive = false;
+                    break;
+            }
+            delete cmd;
+        }
+    }
+
     if (this->audioThread != nullptr)
-    {
-        this->audioThread->waitForCompletion();
-    }
-    if (this->videoThread != nullptr)
-    {
-        this->videoThread->waitForCompletion();
-    }
-}
-NativePlayer::~NativePlayer()
-{
-	if (this->audioThread != nullptr)
     {
         this->audioThread->stop();
     }
@@ -314,5 +310,85 @@ NativePlayer::~NativePlayer()
     if (this->client != nullptr)
     {
         delete this->client;
+    }
+}
+void NativePlayer::playThreadFunc()
+{
+    clock->changeState(OMX_StateExecuting);
+    this->playing = true;
+    playState = 1;
+    PrebufferBlock * block = getNextBlock(true);
+    while(block != nullptr && this->playing)
+    {
+        if (block->video)
+        {
+            if (this->videoThread != nullptr)
+            {
+                this->videoThread->addData((VideoBlock *)block->block);
+            }
+            else
+            {
+                VideoBlock * vb = (VideoBlock *)block->block;
+                delete[] vb->data;
+                delete vb;
+            }
+        }
+        else
+        {
+            if (this->audioThread != nullptr)
+            {
+                this->audioThread->addData((AudioBlock *)block->block);
+            }
+            else
+            {
+                AudioBlock * ab = (AudioBlock *)block->block;
+                delete[] ab->data;
+                delete ab;
+            }
+        }
+        delete block;
+        block = getNextBlock(true);
+    }
+    if (block != nullptr)
+    {
+        if (block->video)
+        {
+            VideoBlock * vb = (VideoBlock *)block->block;
+            delete[] vb->data;
+            delete vb;
+        }
+        else
+        {
+            AudioBlock * ab = (AudioBlock *)block->block;
+            delete[] ab->data;
+            delete ab;
+        }
+        delete block;
+    }
+    playbackComplete();
+}
+void NativePlayer::waitForCompletion()
+{
+    if (this->audioThread != nullptr)
+    {
+        this->audioThread->waitForCompletion();
+    }
+    if (this->videoThread != nullptr)
+    {
+        this->videoThread->waitForCompletion();
+    }
+}
+NativePlayer::~NativePlayer()
+{
+    if (controlThread.joinable())
+    {
+        {
+            ControlQueueCommand * cmd = new ControlQueueCommand();
+            cmd->commandType = ControlQueueCommandType::Stop;
+            std::unique_lock<std::mutex> lk(controlMutex);
+            controlCommandQueue.push(cmd);
+            controlCommandReady.notify_one();
+        }
+        controlThread.join();
     }
 }

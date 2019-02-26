@@ -23,28 +23,32 @@ std::thread t;
 
 int main (int argc, char **argv)
 {
-    NativePlayer * n;
-    auto exitFunc = [&](){
-        n->waitForCompletion();
-        printf("Playback truly finished");
-        delete n;
-    };
-    n = new NativePlayer(std::string("http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4"), [&](){
-        printf("Playback Completed");
-        t = std::thread(exitFunc);
-    });
-
-    int delay = 5;
-    do
+    for (int x = 0; x < 3; x++)
     {
-        printf("Starting in %d\n", delay);
-        fflush(stdout);
-        delay--;
-        usleep(1000000);
-    }
-    while(delay > 0);
+        printf("Loading player"); fflush(stdout);
+        NativePlayer * n = new NativePlayer(std::string("/augmentality/storage/briefing.mp4"), [&]()
+        {
+            printf("Playback Completed");fflush(stdout);
+        });
 
-    n->play();
-    sleep(30);
-    t.join();
+        int delay = 2;
+        do
+        {
+            printf("Starting in %d\n", delay); fflush(stdout);
+            fflush(stdout);
+            delay--;
+            usleep(1000000);
+        } while (delay > 0);
+
+        n->play();
+
+        printf("Playing for 5 seconds"); fflush(stdout);
+        sleep(5);
+        printf("Stopping");fflush(stdout);
+        delete n;
+        sleep(5);
+        printf("Waiting a bit.."); fflush(stdout);
+    }
+    printf("All done"); fflush(stdout);
+    return 0;
 }

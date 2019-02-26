@@ -555,7 +555,10 @@ int ILComponent::waitForCommandCompleteDual(OMX_COMMANDTYPE command, OMX_U32 nDa
     {
         ILEVENT_T *cur, *prev = nullptr;
         VCOS_UNSIGNED set;
-
+        if (this->client == nullptr)
+        {
+            throw ILComponentException(std::string("waitForCommandCompletedual: Client is null!"));
+        }
         this->client->lockEvents();
 
         cur = this->comp->list;
@@ -626,6 +629,14 @@ int ILComponent::waitForCommandCompleteDual(OMX_COMMANDTYPE command, OMX_U32 nDa
 
 ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPort, unsigned int portStream, int timeout)
 {
+    if (this == nullptr)
+    {
+        throw ILComponentException(std::string("tunnelTo: Source is null"));
+    }
+    if (sink == nullptr)
+    {
+        throw ILComponentException(std::string("tunnelTo: Sink is null"));
+    }
     ILTunnel * tunnel = new ILTunnel();
     tunnel->sourceComponent = this;
     tunnel->sourcePort = sourcePort;

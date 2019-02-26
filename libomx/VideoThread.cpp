@@ -43,8 +43,6 @@ void VideoThread::waitForCompletion()
     {
         std::unique_lock <std::mutex> lk(videoPlayingMutex);
     }
-    this->vdc->flush();
-    this->vdr->flush();
 }
 VideoBlock * VideoThread::dequeue()
 {
@@ -262,6 +260,8 @@ void VideoThread::videoThreadFunc()
         buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
         vdc->emptyBuffer(buff_header);
     }
+    vdc->flush();
+    vdr->flush();
     {
         std::unique_lock<std::mutex> lk(syncMutex);
         playThreadFinished.notify_one();

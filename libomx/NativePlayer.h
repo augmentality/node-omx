@@ -25,6 +25,7 @@
 #include "VideoThread.h"
 #include "AudioThread.h"
 #include "prebufferBlock.h"
+#include "ControlQueueCommand.h"
 #include <thread>
 #include <queue>
 #include <functional>
@@ -49,18 +50,25 @@ public:
     void waitForCompletion();
 
 private:
+    std::string playerURL;
     std::function<void()> playbackComplete;
     std::queue<PrebufferBlock *> prebuffer;
     FFFrame * frame = nullptr;
     bool playing = false;
+    bool nativePlayerActive = true;
+    std::mutex controlMutex;
+    std::condition_variable controlCommandReady;
+    std::queue<ControlQueueCommand *> controlCommandQueue;
 
     void playThreadFunc();
+    void controlThreadFunc();
 
     PrebufferBlock * getNextBlock(bool fromPrebuffer);
 
     int playState = 0;
     float playSpeed = 1.0f;
     std::thread playThread;
+    std::thread controlThread;
     FFSource * src = nullptr;
     ILClient * client = nullptr;
     ClockComponent * clock = nullptr;

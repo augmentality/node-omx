@@ -49,8 +49,9 @@ Player::~Player()
 {
     if (nativePlayer != nullptr)
     {
-        delete nativePlayer;
+        NativePlayer * np = nativePlayer;
         nativePlayer = nullptr;
+        delete np;
     }
 }
 
@@ -126,8 +127,9 @@ NAN_INLINE void loadVideo (uv_work_t* req)
     Player * objRef = data->player;
     if (objRef->nativePlayer != nullptr)
     {
-        delete objRef->nativePlayer;
+        NativePlayer * np = objRef->nativePlayer;
         objRef->nativePlayer = nullptr;
+        delete np;
     }
     objRef->nativePlayer = new NativePlayer(data->url, [objRef]()
     {
@@ -278,8 +280,9 @@ NAN_METHOD(Player::stop)
     }
     if (obj->nativePlayer != nullptr)
     {
-        delete obj->nativePlayer;
+        NativePlayer * np = obj->nativePlayer;
         obj->nativePlayer = nullptr;
+        delete np;
     }
     obj->playState = 0;
     v8::Local<v8::Value> argv[] = {

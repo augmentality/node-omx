@@ -30,10 +30,13 @@ class Player : public Nan::ObjectWrap
         static NAN_MODULE_INIT(Init);
         void completePlayback()
         {
-            nativePlayer->waitForCompletion();
-            playState = 0;
-            delete nativePlayer;
-            nativePlayer = nullptr;
+            if (nativePlayer != nullptr)
+            {
+                nativePlayer->waitForCompletion();
+                NativePlayer * np = nativePlayer;
+                nativePlayer = nullptr;
+                delete np;
+            }
         }
         int playState = 0;
         Nan::Callback playbackStateCallback;

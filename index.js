@@ -32,12 +32,18 @@ class Player {
         if (this.state !== 0) {
             throw new Error('URL already open. Stop first or create a new instance.');
         }
+        let main = this;
         return new Promise((resolve, reject) => {
             try {
                 this.p.loadURL(url, () => {
                     this.state = 1;
+                    console.log('MAIN: ' + main.state);
                     resolve();
                 }, (state) => {
+                    if (this.state === 0 && state === 1)
+                    {
+                        this.state = 1;
+                    }
                     this.onPlaybackState.next(state);
                 });
             }
