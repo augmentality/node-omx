@@ -36,5 +36,6 @@ class AudioRenderComponent: public ILComponent
         explicit AudioRenderComponent(ILClient * client);
         void setPCMMode(int sampleRate, int channelCount, AVSampleFormat format);
         void setAudioDest(const char * dest);
+        void waitForEOS();
 
 };

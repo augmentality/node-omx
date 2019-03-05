@@ -19,7 +19,7 @@
 
 #include "VideoThread.h"
 
-#define VIDEO_QUEUE_SIZE 2000
+#define VIDEO_QUEUE_SIZE 500
 
 VideoThread::VideoThread(ILClient * pClient, ClockComponent * pClock, FFSource * src):
     client(pClient), clock(pClock)
@@ -39,9 +39,19 @@ void VideoThread::start()
 }
 void VideoThread::waitForCompletion()
 {
-    waitingForEnd = true;
+    bool isRunning = false;
     {
-        std::unique_lock <std::mutex> lk(videoPlayingMutex);
+        std::unique_lock<std::mutex> lk(syncMutex);
+        isRunning = threadRunning;
+    }
+    if (isRunning)
+    {
+        stop(false);
+    }
+    this->playbackComplete = true;
+    if (this->videoThread.joinable())
+    {
+        this->videoThread.join();
     }
 }
 VideoBlock * VideoThread::dequeue()
@@ -67,26 +77,23 @@ VideoBlock * VideoThread::dequeue()
         playbackComplete = true;
         return nullptr;
     }
-    if (playbackComplete || videoQueue.empty())
+    VideoBlock * b = videoQueue.front();
+    videoQueue.pop();
+    if (videoQueue.empty() && waitingForEnd)
     {
-        return nullptr;
+        playbackComplete = true;
     }
-    else
+    if (videoQueue.size() < VIDEO_QUEUE_SIZE && !bufferReady)
     {
-        VideoBlock * b = videoQueue.front();
-        videoQueue.pop();
-        if (videoQueue.empty() && waitingForEnd)
-        {
-            playbackComplete = true;
-        }
-        if (videoQueue.size() < VIDEO_QUEUE_SIZE && !bufferReady)
-        {
-            std::unique_lock<std::mutex> lk(readyForDataMutex);
-            bufferReady = true;
-            readyForData.notify_one();
-        }
-        return b;
+        std::unique_lock<std::mutex> lk(readyForDataMutex);
+        bufferReady = true;
+        readyForData.notify_one();
     }
+    if (b == nullptr)
+    {
+        playbackComplete = true;
+    }
+    return b;
 }
 void VideoThread::waitForBuffer()
 {
@@ -103,25 +110,28 @@ void VideoThread::waitForBuffer()
         });
     }
 }
-void VideoThread::stop()
+void VideoThread::stop(bool immediately)
 {
     waitForBuffer();
     {
         waitingForEnd = true;
-        std::unique_lock<std::mutex> lk(videoQueueMutex);
-        while(videoQueue.size() > 0)
+        if (immediately)
         {
-            VideoBlock * b = videoQueue.front();
-            videoQueue.pop();
-            if (b != nullptr)
+            std::unique_lock<std::mutex> lk(videoQueueMutex);
+            while (!videoQueue.empty())
             {
-                delete[] b->data;
-                delete b;
+                VideoBlock * b = videoQueue.front();
+                videoQueue.pop();
+                if (b != nullptr)
+                {
+                    delete[] b->data;
+                    delete b;
+                }
             }
+            videoQueue.push(nullptr);
+            bufferReady = false;
+            videoReady.notify_one();
         }
-        videoQueue.push(nullptr);
-        bufferReady = false;
-        videoReady.notify_one();
     }
     {
         std::unique_lock<std::mutex> lk(syncMutex);
@@ -259,9 +269,8 @@ void VideoThread::videoThreadFunc()
 
         buff_header->nFlags = OMX_BUFFERFLAG_ENDOFFRAME | OMX_BUFFERFLAG_EOS | OMX_BUFFERFLAG_TIME_UNKNOWN;
         vdc->emptyBuffer(buff_header);
+        vdr->waitForEOS();
     }
-    vdc->flush();
-    vdr->flush();
     {
         std::unique_lock<std::mutex> lk(syncMutex);
         playThreadFinished.notify_one();
@@ -281,24 +290,71 @@ void VideoThread::addData(VideoBlock * vb)
         videoReady.notify_one();
     }
 }
+
+
 VideoThread::~VideoThread()
 {
-    bool isRunning = false;
+    // Step 1 - Kill the noize
+    if (videoThread.joinable())
     {
-        std::unique_lock<std::mutex> lk(syncMutex);
-        isRunning = threadRunning;
+        videoThread.join();
     }
-    if (isRunning)
+
+    // Step 2 - Flush the inputs
+    if (this->vdc != nullptr)
     {
-        stop();
+        this->vdc->flushInput();
+        this->vdc->flushOutput();
     }
-    this->playbackComplete = true;
-    if (this->videoThread.joinable())
+
+    // Step 3 - Kill the first tunnel
+    if (this->decodeTunnel != nullptr)
     {
-        this->videoThread.join();
+        this->decodeTunnel->flush();
+        this->decodeTunnel->disable();
+        delete this->decodeTunnel;
+        this->decodeTunnel = nullptr;
     }
-    this->vdc->changeState(OMX_StateIdle);
+
+    // Step 4 - Kill the decode component
+    if (this->vdc != nullptr)
+    {
+        this->vdc->disablePortBuffers(130, nullptr, nullptr, nullptr);
+        this->vdc->changeState(OMX_StateIdle);
+        this->vdc->changeState(OMX_StateLoaded);
+        delete this->vdc;
+        this->vdc = nullptr;
+    }
+    if (this->clockSchedTunnel != nullptr)
+    {
+        this->clockSchedTunnel->flush();
+        this->clockSchedTunnel->disable();
+        delete this->clockSchedTunnel;
+        this->clockSchedTunnel = nullptr;
+    }
+    if (this->schedTunnel != nullptr)
+    {
+        this->schedTunnel->flush();
+        this->schedTunnel->disable();
+        delete this->schedTunnel;
+        this->schedTunnel = nullptr;
+    }
+    if (this->sched != nullptr)
+    {
+        this->sched->changeState(OMX_StateIdle);
+        this->sched->changeState(OMX_StateLoaded);
+        delete this->sched;
+        this->sched = nullptr;
+    }
+    if (this->vdr != nullptr)
+    {
+        this->vdr->changeState(OMX_StateIdle);
+        this->vdr->changeState(OMX_StateLoaded);
+        delete this->vdr;
+        this->vdr = nullptr;
+    }
     // Empty queue
+    size_t dataSize = 0;
     while(videoQueue.size() > 0)
     {
         VideoBlock * b = videoQueue.front();
@@ -309,34 +365,5 @@ VideoThread::~VideoThread()
             delete b;
         }
     }
-    if (this->decodeTunnel != nullptr)
-    {
-        delete this->decodeTunnel;
-        this->decodeTunnel = nullptr;
-    }
-    if (this->schedTunnel != nullptr)
-    {
-        delete this->schedTunnel;
-        this->schedTunnel = nullptr;
-    }
-    if (this->clockSchedTunnel != nullptr)
-    {
-        delete this->clockSchedTunnel;
-    }
-    if (this->vdr != nullptr)
-    {
-        delete this->vdr;
-        this->vdr = nullptr;
-    }
-    this->vdc->disablePortBuffers(130, nullptr, nullptr, nullptr);
-    if (this->vdc != nullptr)
-    {
-        delete this->vdc;
-        this->vdc = nullptr;
-    }
-    if (this->sched != nullptr)
-    {
-        delete this->sched;
-        this->sched = nullptr;
-    }
+   
 }

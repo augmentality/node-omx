@@ -26,7 +26,7 @@ VideoRenderComponent::VideoRenderComponent(ILClient *client): ILComponent(client
 {
 
 }
-void VideoRenderComponent::flush()
+void VideoRenderComponent::waitForEOS()
 {
-
+    this->waitForEvent(OMX_EventBufferFlag, 90, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, -1);
 }

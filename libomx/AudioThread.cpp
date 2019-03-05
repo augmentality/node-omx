@@ -19,13 +19,16 @@
 
 #include "AudioThread.h"
 
-#define AUDIO_QUEUE_SIZE 2000
+#define AUDIO_QUEUE_SIZE 500
 
-AudioThread::AudioThread(ILClient * pClient, ClockComponent * pClock, FFSource * src):
+AudioThread::AudioThread(ILClient * pClient, ClockComponent * pClock, FFSource * src, bool skipClock):
         client(pClient), clock(pClock)
 {
     this->arc = new AudioRenderComponent(this->client);
-    this->clockAudioTunnel = this->clock->tunnelTo(81, this->arc, 101, 0, 0);
+    if (!skipClock)
+    {
+        this->clockAudioTunnel = this->clock->tunnelTo(81, this->arc, 101, 0, 0);
+    }
     this->arc->setPCMMode(src->sampleRate, src->channels, AVSampleFormat::AV_SAMPLE_FMT_S16);
     this->arc->changeState(OMX_StateIdle);
     this->arc->enablePortBuffers(100, nullptr, nullptr, nullptr);
@@ -38,33 +41,46 @@ void AudioThread::start()
 }
 void AudioThread::waitForCompletion()
 {
-    waitingForEnd = true;
+    bool isRunning = false;
     {
-        std::unique_lock <std::mutex> lk(audioPlayingMutex);
+        std::unique_lock<std::mutex> lk(syncMutex);
+        isRunning = threadRunning;
+    }
+    if (isRunning)
+    {
+        stop(false);
+    }
+    this->playbackComplete = true;
+    if (this->audioThread.joinable())
+    {
+        this->audioThread.join();
     }
 }
-void AudioThread::stop()
+void AudioThread::stop(bool immediately)
 {
     waitForBuffer();
     {
         waitingForEnd = true;
-        std::unique_lock<std::mutex> lk(audioQueueMutex);
-
-        // Empty queue
-        while(audioQueue.size() > 0)
+        if (immediately)
         {
-            AudioBlock * b = audioQueue.front();
-            audioQueue.pop();
-            if (b != nullptr)
-            {
-                delete[] b->data;
-                delete b;
-            }
-        }
+            std::unique_lock<std::mutex> lk(audioQueueMutex);
 
-        audioQueue.push(nullptr);
-        bufferReady = false;
-        audioReady.notify_one();
+            // Empty queue
+            while (audioQueue.size() > 0)
+            {
+                AudioBlock * b = audioQueue.front();
+                audioQueue.pop();
+                if (b != nullptr)
+                {
+                    delete[] b->data;
+                    delete b;
+                }
+            }
+
+            audioQueue.push(nullptr);
+            bufferReady = false;
+            audioReady.notify_one();
+        }
     }
     {
         std::unique_lock<std::mutex> lk(syncMutex);
@@ -233,22 +249,19 @@ AudioBlock * AudioThread::dequeue()
         playbackComplete = true;
         return nullptr;
     }
-    if (playbackComplete || audioQueue.empty())
+    AudioBlock * b = audioQueue.front();
+    audioQueue.pop();
+    if (audioQueue.size() < AUDIO_QUEUE_SIZE && !bufferReady)
     {
-        return nullptr;
+        std::unique_lock<std::mutex> lk(readyForDataMutex);
+        bufferReady = true;
+        readyForData.notify_one();
     }
-    else
+    if (b == nullptr)
     {
-        AudioBlock * b = audioQueue.front();
-        audioQueue.pop();
-        if (audioQueue.size() < AUDIO_QUEUE_SIZE && !bufferReady)
-        {
-            std::unique_lock<std::mutex> lk(readyForDataMutex);
-            bufferReady = true;
-            readyForData.notify_one();
-        }
-        return b;
+        playbackComplete = true;
     }
+    return b;
 }
 void AudioThread::waitForBuffer()
 {
@@ -278,22 +291,35 @@ void AudioThread::addData(AudioBlock * ab)
         audioReady.notify_one();
     }
 }
+
 AudioThread::~AudioThread()
 {
-    bool isRunning = false;
+    // Step 1 - Kill the noize
+    if (audioThread.joinable())
     {
-        std::unique_lock<std::mutex> lk(syncMutex);
-        isRunning = threadRunning;
+        audioThread.join();
     }
-    if (isRunning)
+
+    // Step 2 - Kill the tunnels
+    if (this->clockAudioTunnel != nullptr)
     {
-        stop();
+        this->clockAudioTunnel->flush();
+        this->clockAudioTunnel->disable();
+        delete this->clockAudioTunnel;
+        this->clockAudioTunnel = nullptr;
     }
-    this->playbackComplete = true;
-    if (this->audioThread.joinable())
+
+	this->arc->disablePortBuffers(100, nullptr, nullptr, nullptr);
+
+    // Step 3 - Kill the render component
+    if (this->arc != nullptr)
     {
-        this->audioThread.join();
+        this->arc->changeState(OMX_StateIdle);
+        this->arc->changeState(OMX_StateLoaded);
+        delete this->arc;
+        this->arc = nullptr;
     }
+
     // Empty queue
     while(audioQueue.size() > 0)
     {
@@ -305,14 +331,6 @@ AudioThread::~AudioThread()
             delete b;
         }
     }
-
-    if (this->clockAudioTunnel != nullptr)
-    {
-        delete this->clockAudioTunnel;
-        this->clockAudioTunnel = nullptr;
-    }
-
-    this->arc->disablePortBuffers(100, nullptr, nullptr, nullptr);
 
     if (this->arc != nullptr)
     {

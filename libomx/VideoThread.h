@@ -40,7 +40,7 @@ public:
     void start();
     void addData(VideoBlock * block);
     void waitForCompletion();
-    void stop();
+    void stop(bool immediately);
 private:
     void videoThreadFunc();
     void waitForBuffer();

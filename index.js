@@ -32,18 +32,12 @@ class Player {
         if (this.state !== 0) {
             throw new Error('URL already open. Stop first or create a new instance.');
         }
-        let main = this;
         return new Promise((resolve, reject) => {
             try {
                 this.p.loadURL(url, () => {
                     this.state = 1;
-                    console.log('MAIN: ' + main.state);
                     resolve();
                 }, (state) => {
-                    if (this.state === 0 && state === 1)
-                    {
-                        this.state = 1;
-                    }
                     this.onPlaybackState.next(state);
                 });
             }
@@ -52,7 +46,7 @@ class Player {
         });
     }
     play() {
-        if (this.state === 0 || this.p === null) {
+        if (this.state === 0) {
             throw new Error('No file loaded');
         }
         if (this.state === 2) {
@@ -71,6 +65,10 @@ class Player {
         this.state = 0;
         this.p.stop();
         this.p = null;
+        // If started with node --expose-gc then force a garbage collection run here
+        if (global && global.gc) {
+            global.gc();
+        }
     }
     pause() {
         if (this.state === 0 || this.p === null) {

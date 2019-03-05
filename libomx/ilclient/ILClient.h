@@ -58,8 +58,8 @@ public:
 
     ~ILClient()
     {
-            this->destroy();
-            OMX_Deinit();
+        this->destroy();
+        OMX_Deinit();
     }
 
     ILCLIENT_T * getClient()

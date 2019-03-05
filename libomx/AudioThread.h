@@ -33,12 +33,12 @@
 class AudioThread
 {
 public:
-    AudioThread(ILClient * pClient, ClockComponent * pClock, FFSource * src);
+    AudioThread(ILClient * pClient, ClockComponent * pClock, FFSource * src, bool skipClock);
     ~AudioThread();
     void start();
     void addData(AudioBlock * block);
     void waitForCompletion();
-    void stop();
+    void stop(bool immediately);
 private:
     bool waitingForEnd = false;
     bool playbackComplete = false;
@@ -46,6 +46,7 @@ private:
     void audioThreadFunc();
     void waitForBuffer();
     AudioBlock * dequeue();
+
 
     ILClient * client;
     ClockComponent * clock;

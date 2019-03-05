@@ -8,5 +8,6 @@ enum class ControlQueueCommandType
     Pause = 3,
     Stop = 4,
     SetSpeed = 5,
-    SetLoop = 6
+    SetLoop = 6,
+    Completed = 7
 };

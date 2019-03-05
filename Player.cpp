@@ -39,14 +39,14 @@ NAN_MODULE_INIT(Player::Init) {
     constructor.Reset(Nan::GetFunction(tpl).ToLocalChecked());
     Nan::Set(target, Nan::New("Player").ToLocalChecked(), Nan::GetFunction(tpl).ToLocalChecked());
 }
-
 Player::Player()
 {
-
+    state = std::make_shared<InstanceState>();
 }
 
 Player::~Player()
 {
+    state->active = false;
     if (nativePlayer != nullptr)
     {
         NativePlayer * np = nativePlayer;
@@ -131,12 +131,17 @@ NAN_INLINE void loadVideo (uv_work_t* req)
         objRef->nativePlayer = nullptr;
         delete np;
     }
-    objRef->nativePlayer = new NativePlayer(data->url, [objRef]()
+    std::shared_ptr<InstanceState> state = objRef->state;
+    objRef->nativePlayer = new NativePlayer(data->url, [objRef, state]()
     {
-        playbackFinishedData * data = new playbackFinishedData();
-        data->player = objRef;
-        data->request.data = (void *)data;
-        uv_queue_work(uv_default_loop(), &data->request, completePlayback, reinterpret_cast<uv_after_work_cb>(playbackCompletedEvent));
+        if (state->active)
+        {
+            playbackFinishedData * data = new playbackFinishedData();
+            data->player = objRef;
+            data->request.data = (void *)data;
+            uv_queue_work(uv_default_loop(), &data->request, completePlayback,
+                          reinterpret_cast<uv_after_work_cb>(playbackCompletedEvent));
+        }
     });
     objRef->playState = 1;
 }

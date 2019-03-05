@@ -23,12 +23,13 @@ std::thread t;
 
 int main (int argc, char **argv)
 {
-    for (int x = 0; x < 3; x++)
+    /*
+    for (int x = 0; x < 3000; x++)
     {
-        printf("Loading player"); fflush(stdout);
+        printf("Loading player\n"); fflush(stdout);
         NativePlayer * n = new NativePlayer(std::string("/augmentality/storage/briefing.mp4"), [&]()
         {
-            printf("Playback Completed");fflush(stdout);
+            printf("Playback Completed\n");fflush(stdout);
         });
 
         int delay = 2;
@@ -42,13 +43,26 @@ int main (int argc, char **argv)
 
         n->play();
 
-        printf("Playing for 5 seconds"); fflush(stdout);
-        sleep(5);
-        printf("Stopping");fflush(stdout);
+        printf("Playing for 30 seconds\n"); fflush(stdout);
+        sleep(30);
+        printf("Stopping\n");fflush(stdout);
         delete n;
+        printf("Waiting a bit..\n"); fflush(stdout);
         sleep(5);
-        printf("Waiting a bit.."); fflush(stdout);
     }
     printf("All done"); fflush(stdout);
+     */
+    bool finished = false;
+    NativePlayer * n = new NativePlayer(std::string("/augmentality/storage/entrypoint.mp4"), [&]()
+    {
+        printf("Playback Completed\n");fflush(stdout);
+        finished = true;
+    });
+    n->play();
+    while(!finished)
+    {
+        sleep(1);
+    }
+    delete n;
     return 0;
 }

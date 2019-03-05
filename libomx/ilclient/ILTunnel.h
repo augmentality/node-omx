@@ -22,14 +22,22 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 #pragma once
 #include "ilc.h"
+#include "ILClient.h"
 class ILComponent;
 
-struct ILTunnel
+class ILTunnel
 {
+public:
+    ILTunnel(ILClient * client, ILComponent * source, ILComponent * dest, int srcPort, int dstPort);
+    void flush();
+    ~ILTunnel();
+    int enable();
+    int disable();
+
+private:
+    ILClient * client;
     ILComponent * sourceComponent;
     int sourcePort;
     ILComponent * sinkComponent;
     int sinkPort;
-
-    ~ILTunnel();
 };

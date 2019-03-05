@@ -21,8 +21,10 @@
 
 #include <nan.h>
 #include "libomx/NativePlayer.h"
+#include "InstanceState.h"
 #include <stdexcept>
 #include <thread>
+#include <memory>
 
 class Player : public Nan::ObjectWrap
 {
@@ -41,9 +43,9 @@ class Player : public Nan::ObjectWrap
         int playState = 0;
         Nan::Callback playbackStateCallback;
         NativePlayer * nativePlayer = nullptr;
+        std::shared_ptr<InstanceState> state;
 
     private:
-        std::thread runThread;
         explicit Player();
         ~Player();
         static NAN_METHOD(New);

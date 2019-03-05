@@ -57,8 +57,3 @@ void VideoDecodeComponent::setVideoCompressionFormat(OMX_VIDEO_CODINGTYPE codec,
         throw ILComponentException(std::string("Unable to set video compression format"));
     }
 }
-
-void VideoDecodeComponent::flush()
-{
-    this->waitForEvent(OMX_EventBufferFlag, 131, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, 10000);
-}

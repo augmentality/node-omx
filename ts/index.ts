@@ -93,6 +93,12 @@ export class Player
         this.state = 0;
         this.p.stop();
         this.p = null;
+
+        // If started with node --expose-gc then force a garbage collection run here
+        if (global && global.gc)
+        {
+            global.gc();
+        }
     }
 
     pause()

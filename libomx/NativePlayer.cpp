@@ -156,6 +156,7 @@ void NativePlayer::controlThreadFunc()
     if (!this->src->hasVideo && !this->src->hasAudio)
     {
         delete src;
+        src = nullptr;
         throw std::runtime_error(std::string("No playable streams"));
     }
 
@@ -164,11 +165,11 @@ void NativePlayer::controlThreadFunc()
     this->clock = new ClockComponent(client);
     this->clock->setTimeScale(1.0);
 
-    if (src->hasAudio)
+    if (src->hasAudio && !this->skipAudio)
     {
-        this->audioThread = new AudioThread(this->client, this->clock, this->src);
+        this->audioThread = new AudioThread(this->client, this->clock, this->src, this->skipVideo);
     }
-    if (src->hasVideo)
+    if (src->hasVideo && !this->skipVideo)
     {
         this->videoThread = new VideoThread(this->client, this->clock, this->src);
     }
@@ -178,7 +179,7 @@ void NativePlayer::controlThreadFunc()
     {
         prebuffer.push(getNextBlock(false));
     }
-
+    bool completed = false;
     while(this->nativePlayerActive)
     {
         std::unique_lock<std::mutex> lk(controlMutex);
@@ -240,51 +241,28 @@ void NativePlayer::controlThreadFunc()
                 case ControlQueueCommandType::Stop:
                     this->nativePlayerActive = false;
                     break;
+                case ControlQueueCommandType::Completed:
+                    this->nativePlayerActive = false;
+                    completed = true;
+                    break;
             }
             delete cmd;
         }
     }
-
-    if (this->audioThread != nullptr)
+    printf("PlayThread Join?\n"); fflush(stdout);
+    if (playThread.joinable())
     {
-        this->audioThread->stop();
-    }
-    if (this->videoThread != nullptr)
-    {
-        this->videoThread->stop();
-    }
-    clock->changeState(OMX_StateIdle);
-    if (this->playing)
-    {
+        printf("Joining\n"); fflush(stdout);
         this->playing = false;
-        this->playThread.join();
+        playThread.join();
     }
     if (this->src != nullptr)
     {
+        printf("Delete src\n"); fflush(stdout);
         delete this->src;
+        this->src = nullptr;
     }
-    if (this->audioThread != nullptr)
-    {
-        delete this->audioThread;
-    }
-    if (this->videoThread != nullptr)
-    {
-        delete this->videoThread;
-    }
-    if (frame != nullptr)
-    {
-        if (frame->frame != nullptr)
-        {
-            av_frame_free(&frame->frame);
-            frame->frame = nullptr;
-        }
-        if (frame->convertedAudio != nullptr)
-        {
-            delete[] frame->convertedAudio;
-            frame->convertedAudio = nullptr;
-        }
-        delete frame;
-    }
+    printf("Clearing prebuffer\n"); fflush(stdout);
     while (prebuffer.size() > 0)
     {
         PrebufferBlock * blk = prebuffer.front();
@@ -303,14 +281,58 @@ void NativePlayer::controlThreadFunc()
         }
         delete blk;
     }
+    if (this->audioThread != nullptr)
+    {
+        this->audioThread->stop(!completed);
+    }
+    if (this->videoThread != nullptr)
+    {
+        this->videoThread->stop(!completed);
+    }
+    if (this->audioThread != nullptr)
+    {
+        delete this->audioThread;
+        this->audioThread = nullptr;
+    }
+    if (this->videoThread != nullptr)
+    {
+        delete this->videoThread;
+        this->videoThread = nullptr;
+    }
+    if (frame != nullptr)
+    {
+        if (frame->frame != nullptr)
+        {
+            av_frame_free(&frame->frame);
+            frame->frame = nullptr;
+        }
+        if (frame->convertedAudio != nullptr)
+        {
+            delete[] frame->convertedAudio;
+            frame->convertedAudio = nullptr;
+        }
+        delete frame;
+    }
     if (this->clock != nullptr)
     {
         delete this->clock;
+        this->clock = nullptr;
     }
     if (this->client != nullptr)
     {
         delete this->client;
+        this->client = nullptr;
     }
+    {
+        std::unique_lock<std::mutex> lk(controlMutex);
+        while (!controlCommandQueue.empty())
+        {
+            ControlQueueCommand * cmd = controlCommandQueue.front();
+            controlCommandQueue.pop();
+            delete cmd;
+        }
+    }
+    playbackComplete();
 }
 void NativePlayer::playThreadFunc()
 {
@@ -322,7 +344,7 @@ void NativePlayer::playThreadFunc()
     {
         if (block->video)
         {
-            if (this->videoThread != nullptr)
+            if (this->videoThread != nullptr && !this->skipVideo)
             {
                 this->videoThread->addData((VideoBlock *)block->block);
             }
@@ -335,7 +357,7 @@ void NativePlayer::playThreadFunc()
         }
         else
         {
-            if (this->audioThread != nullptr)
+            if (this->audioThread != nullptr && !this->skipAudio)
             {
                 this->audioThread->addData((AudioBlock *)block->block);
             }
@@ -365,7 +387,23 @@ void NativePlayer::playThreadFunc()
         }
         delete block;
     }
-    playbackComplete();
+    if (!skipAudio)
+    {
+        this->audioThread->addData((AudioBlock *)nullptr);
+    }
+    if (!skipVideo)
+    {
+        this->videoThread->addData((VideoBlock *)nullptr);
+    }
+    this->playing = false;
+    if (this->nativePlayerActive)
+    {
+        ControlQueueCommand * cmd = new ControlQueueCommand();
+        cmd->commandType = ControlQueueCommandType::Completed;
+        std::unique_lock<std::mutex> lk(controlMutex);
+        controlCommandQueue.push(cmd);
+        controlCommandReady.notify_one();
+    }
 }
 void NativePlayer::waitForCompletion()
 {

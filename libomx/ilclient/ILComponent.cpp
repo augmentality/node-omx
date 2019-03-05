@@ -443,11 +443,27 @@ ILComponent::ILComponent(ILClient * client, const std::string _componentName, co
             this->comp->bufname[sizeof(comp->bufname)-1] = 0;
         }
 
+        OMX_INDEXTYPE types[] = {OMX_IndexParamAudioInit, OMX_IndexParamVideoInit, OMX_IndexParamImageInit, OMX_IndexParamOtherInit};
+        OMX_PORT_PARAM_TYPE ports;
+        int i;
+        for(i=0; i<4; i++)
+        {
+            OMX_ERRORTYPE error = OMX_GetParameter(this->comp->comp, types[i], &ports);
+            if(error == OMX_ErrorNone)
+            {
+                if (ports.nStartPortNumber > 0)
+                {
+                    this->inputPort = ports.nStartPortNumber;
+                    this->outputPort = this->inputPort + 1;
+                    printf("Input Port: %d, Output Port: %d\n", this->inputPort, this->outputPort);
+                }
+            }
+        }
+
         if(this->comp->flags & (ILCLIENT_DISABLE_ALL_PORTS | ILCLIENT_OUTPUT_ZERO_BUFFERS))
         {
-            OMX_PORT_PARAM_TYPE ports;
-            OMX_INDEXTYPE types[] = {OMX_IndexParamAudioInit, OMX_IndexParamVideoInit, OMX_IndexParamImageInit, OMX_IndexParamOtherInit};
-            int i;
+
+
 
             ports.nSize = sizeof(OMX_PORT_PARAM_TYPE);
             ports.nVersion.nVersion = OMX_VERSION;
@@ -457,9 +473,6 @@ ILComponent::ILComponent(ILClient * client, const std::string _componentName, co
                 if(error == OMX_ErrorNone)
                 {
                     uint32_t j;
-
-                    this->inputPort = ports.nStartPortNumber;
-                    this->outputPort = this->inputPort + 1;
 
                     for(j = 0; j < ports.nPorts; j++)
                     {
@@ -503,6 +516,17 @@ ILComponent::~ILComponent()
 {
     if (this->comp != nullptr)
     {
+        this->client->lockEvents();
+        while (comp->list)
+        {
+            ILEVENT_T *next = comp->list->next;
+            comp->list->next = comp->client->event_list;
+            comp->client->event_list = comp->list;
+            comp->list = next;
+        }
+        this->client->unlockEvents();
+
+
         OMX_FreeHandle(this->comp->comp);
         vcos_event_flags_delete(&this->comp->event);
         vcos_semaphore_delete(&this->comp->sema);
@@ -637,11 +661,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
     {
         throw ILComponentException(std::string("tunnelTo: Sink is null"));
     }
-    ILTunnel * tunnel = new ILTunnel();
-    tunnel->sourceComponent = this;
-    tunnel->sourcePort = sourcePort;
-    tunnel->sinkComponent = sink;
-    tunnel->sinkPort = sinkPort;
+    ILTunnel * tunnel = new ILTunnel(client, this, sink, sourcePort, sinkPort);
 
     OMX_ERRORTYPE error;
     OMX_PARAM_U32TYPE param;
@@ -654,6 +674,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
     vc_assert(error == OMX_ErrorNone);
     if (state == OMX_StateLoaded && this->changeState(OMX_StateIdle) < 0)
     {
+        delete tunnel;
         throw ILComponentException(std::string("Unable to change component state"));
     }
 
@@ -666,12 +687,13 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
 
         if (status < 0)
         {
+            delete tunnel;
             throw ILComponentException(std::string("ilclient: timed out waiting for port settings changed on port %d"));
         }
     }
 
     // disable ports
-    this->disableTunnel(tunnel);
+    tunnel->disable();
 
     // if this source port uses port streams, we need to select one of them before proceeding
     // if getparameter causes an error that's fine, nothing needs selecting
@@ -684,6 +706,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
         {
             // no streams available
             // leave the source port disabled, and return a failure
+            delete tunnel;
             throw ILComponentException(std::string("No streams available"));
         }
         if (param.nU32 <= portStream)
@@ -691,6 +714,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
             // requested stream not available
             // no streams available
             // leave the source port disabled, and return a failure
+            delete tunnel;
             throw ILComponentException(std::string("Requested stream not available"));
         }
 
@@ -704,7 +728,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
 
     enable_error = 0;
 
-    if (error != OMX_ErrorNone || (enable_error = this->enableTunnel(tunnel)) < 0)
+    if (error != OMX_ErrorNone || (enable_error = tunnel->enable()) < 0)
     {
         // probably format not compatible
         error = OMX_SetupTunnel(this->comp->comp, sourcePort, NULL, 0);
@@ -718,7 +742,7 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
             sink->removeEvent(OMX_EventError, 0, 1, 0, 1);
             this->removeEvent(OMX_EventError, 0, 1, 0, 1);
         }
-
+        delete tunnel;
         throw ILComponentException(std::string("Could not setup/enable tunnel"));
     }
 
@@ -728,6 +752,15 @@ ILTunnel * ILComponent::tunnelTo(int sourcePort, ILComponent * sink, int sinkPor
 int ILComponent::changeState(OMX_STATETYPE state)
 {
     OMX_ERRORTYPE error;
+
+    if (state == OMX_StateLoaded)
+    {
+        this->comp->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
+    }
+    uint32_t set;
+    vcos_event_flags_get(&this->comp->event, ILCLIENT_EVENT_ERROR, VCOS_OR_CONSUME, 0, &set);
+
+
     error = OMX_SendCommand(this->comp->comp, OMX_CommandStateSet, state, NULL);
     vc_assert(error == OMX_ErrorNone);
     if(this->waitForCommandComplete(OMX_CommandStateSet, state) < 0)
@@ -736,7 +769,27 @@ int ILComponent::changeState(OMX_STATETYPE state)
         this->removeEvent(OMX_EventError, 0, 1, 0, 1);
         return -1;
     }
+    if (state == OMX_StateLoaded)
+    {
+        this->comp->error_mask &= ~ILCLIENT_ERROR_UNPOPULATED;
+    }
     return 0;
+}
+void ILComponent::flushInput()
+{
+    OMX_ERRORTYPE error;
+
+    error = OMX_SendCommand(comp->comp, OMX_CommandFlush, inputPort, NULL);
+    vc_assert(error == OMX_ErrorNone);
+    waitForCommandComplete(OMX_CommandFlush, inputPort);
+}
+void ILComponent::flushOutput()
+{
+    OMX_ERRORTYPE error;
+
+    error = OMX_SendCommand(comp->comp, OMX_CommandFlush, outputPort, NULL);
+    vc_assert(error == OMX_ErrorNone);
+    waitForCommandComplete(OMX_CommandFlush, outputPort);
 }
 int ILComponent::removeEvent(OMX_EVENTTYPE eEvent, OMX_U32 nData1, int ignore1, OMX_IN OMX_U32 nData2, int ignore2)
 {
@@ -857,92 +910,6 @@ int ILComponent::waitForEvent(OMX_EVENTTYPE event, OMX_U32 nData1, int ignore1, 
 
     return 0;
 }
-int ILComponent::enableTunnel(ILTunnel * tunnel)
-{
-    OMX_STATETYPE state;
-    OMX_ERRORTYPE error;
-
-    this->client->debugOutput("ilclient: enable tunnel from %x/%d to %x/%d",
-                          tunnel->sourceComponent->getComp(), tunnel->sourcePort,
-                          tunnel->sinkComponent->getComp(), tunnel->sinkPort);
-
-    error = OMX_SendCommand(tunnel->sourceComponent->getComp()->comp, OMX_CommandPortEnable, tunnel->sourcePort, NULL);
-    vc_assert(error == OMX_ErrorNone);
-
-    error = OMX_SendCommand(tunnel->sinkComponent->getComp()->comp, OMX_CommandPortEnable, tunnel->sinkPort, NULL);
-    vc_assert(error == OMX_ErrorNone);
-
-    // to complete, the sink component can't be in loaded state
-    error = OMX_GetState(tunnel->sinkComponent->getComp()->comp, &state);
-    vc_assert(error == OMX_ErrorNone);
-    if (state == OMX_StateLoaded)
-    {
-        int ret = 0;
-
-        if(tunnel->sinkComponent->waitForCommandComplete(OMX_CommandPortEnable, tunnel->sinkPort) != 0 ||
-           OMX_SendCommand(tunnel->sinkComponent->getComp()->comp, OMX_CommandStateSet, OMX_StateIdle, NULL) != OMX_ErrorNone ||
-           (ret = tunnel->sinkComponent->waitForCommandCompleteDual(OMX_CommandStateSet, OMX_StateIdle, tunnel->sourceComponent->getComp())) < 0)
-        {
-            if(ret == -2)
-            {
-                // the error was reported fom the source component: clear this error and disable the sink component
-                tunnel->sourceComponent->waitForCommandComplete(OMX_CommandPortEnable, tunnel->sourcePort);
-                tunnel->sinkComponent->disablePort(tunnel->sinkPort);
-            }
-
-            tunnel->sourceComponent->disablePort(tunnel->sourcePort);
-            throw ILComponentException(std::string("ilclient: could not change component state to IDLE"));
-        }
-    }
-    else
-    {
-        if (tunnel->sinkComponent->waitForCommandComplete(OMX_CommandPortEnable, tunnel->sinkPort) != 0)
-        {
-            //Oops failed to enable the sink port
-            tunnel->sourceComponent->disablePort(tunnel->sourcePort);
-            tunnel->sourceComponent->waitForEvent(OMX_EventCmdComplete,
-                                                  OMX_CommandPortEnable, 0, tunnel->sourcePort, 0,
-                                                  ILCLIENT_PORT_ENABLED | ILCLIENT_EVENT_ERROR, VCOS_EVENT_FLAGS_SUSPEND);
-            throw ILComponentException(std::string("Could not change sink port port to enabled"));
-        }
-    }
-
-    if(tunnel->sourceComponent->waitForCommandComplete(OMX_CommandPortEnable, tunnel->sourcePort) != 0)
-    {
-        tunnel->sinkComponent->disablePort(tunnel->sinkPort);
-        throw ILComponentException(std::string("Could not change source port to enabled"));
-    }
-
-    return 0;
-}
-int ILComponent::disableTunnel(ILTunnel * tunnel)
-{
-    OMX_ERRORTYPE error;
-
-    if(tunnel->sourceComponent->getComp() == nullptr || tunnel->sinkComponent->getComp() == nullptr)
-        return 0;
-
-    tunnel->sourceComponent->getComp()->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
-    tunnel->sinkComponent->getComp()->error_mask |= ILCLIENT_ERROR_UNPOPULATED;
-
-    error = OMX_SendCommand(tunnel->sourceComponent->getComp()->comp, OMX_CommandPortDisable, tunnel->sourcePort, NULL);
-    vc_assert(error == OMX_ErrorNone);
-
-    error = OMX_SendCommand(tunnel->sinkComponent->getComp()->comp, OMX_CommandPortDisable, tunnel->sinkPort, NULL);
-    vc_assert(error == OMX_ErrorNone);
-
-    if(tunnel->sourceComponent->waitForCommandComplete(OMX_CommandPortDisable, tunnel->sourcePort) < 0)
-        vc_assert(0);
-
-    if(tunnel->sinkComponent->waitForCommandComplete(OMX_CommandPortDisable, tunnel->sinkPort) < 0)
-        vc_assert(0);
-
-    tunnel->sourceComponent->getComp()->error_mask &= ~ILCLIENT_ERROR_UNPOPULATED;
-    tunnel->sinkComponent->getComp()->error_mask &= ~ILCLIENT_ERROR_UNPOPULATED;
-
-    return 0;
-}
-
 OMX_ERRORTYPE ILComponent::setOMXParameter(OMX_INDEXTYPE paramIndex, void * paramStruct)
 {
     return OMX_SetParameter(this->comp->comp, paramIndex, paramStruct);

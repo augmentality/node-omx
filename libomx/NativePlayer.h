@@ -59,7 +59,8 @@ private:
     std::mutex controlMutex;
     std::condition_variable controlCommandReady;
     std::queue<ControlQueueCommand *> controlCommandQueue;
-
+    bool skipAudio = false;
+    bool skipVideo = false;
     void playThreadFunc();
     void controlThreadFunc();
 

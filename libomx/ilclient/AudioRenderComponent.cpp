@@ -121,3 +121,7 @@ void AudioRenderComponent::setAudioDest(const char *dest)
     strcpy((char *)ar_dest.sName, dest);
     this->setOMXConfig(OMX_IndexConfigBrcmAudioDestination, &ar_dest);
 }
+void AudioRenderComponent::waitForEOS()
+{
+    this->waitForEvent(OMX_EventBufferFlag, 101, 0, OMX_BUFFERFLAG_EOS, 0, ILCLIENT_BUFFER_FLAG_EOS, -1);
+}

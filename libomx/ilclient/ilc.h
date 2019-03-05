@@ -260,3 +260,6 @@ typedef struct {
     int sink_port;        /**< The input port index on the sink component */
 } TUNNEL_T;
 
+extern "C" {
+    OMX_ERRORTYPE OMX_GetDebugInformation (OMX_OUT OMX_STRING debugInfo, OMX_INOUT OMX_S32 *pLen);
+}

@@ -11,7 +11,13 @@ setInterval(() => {
         p.play();
         setTimeout(() => {
             p.stop();
-            subs.unsubscribe();
+
+            if (run > 10)
+            {
+                console.log('Done 10 runs, exiting.');
+                process.exit();
+            }
+
         }, 5000);
 
     });
