@@ -17,10 +17,10 @@
 // Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 
-import * as cmake from 'node-cmake'
+import * as cmake from '@caspertech/node-cmake'
 import {Subject} from 'rxjs/internal/Subject';
 import {PlaybackState} from "./PlaybackState";
-const omx = cmake('node_omx');
+const omx = cmake('node_omx', false, __dirname);
 
 export class Player
 {

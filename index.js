@@ -17,9 +17,9 @@
 // this program; if not, write to the Free Software Foundation, Inc., 51 Franklin
 // Street, Fifth Floor, Boston, MA 02110-1301, USA.
 Object.defineProperty(exports, "__esModule", { value: true });
-const cmake = require("node-cmake");
+const cmake = require("@caspertech/node-cmake");
 const Subject_1 = require("rxjs/internal/Subject");
-const omx = cmake('node_omx');
+const omx = cmake('node_omx', false, __dirname);
 class Player {
     constructor() {
         this.onPlaybackState = new Subject_1.Subject();
@@ -46,7 +46,7 @@ class Player {
         });
     }
     play() {
-        if (this.state === 0) {
+        if (this.state === 0 || this.p === null) {
             throw new Error('No file loaded');
         }
         if (this.state === 2) {
