@@ -150,7 +150,8 @@ NAN_METHOD(Player::loadURL)
     Player * obj = Nan::ObjectWrap::Unwrap<Player>(info.Holder());
     if (info.Length() > 2)
     {
-        v8::String::Utf8Value param(info[0]->ToString());
+        v8::Isolate* isolate = info.GetIsolate();
+        v8::String::Utf8Value param(isolate, info[0]);
         runPlayerData * data = new runPlayerData();
         data->request.data = (void *)data;
         data->player = obj;
@@ -238,7 +239,7 @@ NAN_METHOD(Player::setSpeed)
     {
         return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
-    double speed = info[0]->NumberValue();
+    double speed = info[0]->NumberValue(Nan::GetCurrentContext()).FromJust();
     obj->nativePlayer->setSpeed((float)speed);
 }
 
@@ -253,7 +254,7 @@ NAN_METHOD(Player::setLoop)
     {
         return Nan::ThrowError(Nan::New("Player is null").ToLocalChecked());
     }
-    bool loop  = info[0]->BooleanValue();
+    bool loop  = info[0]->BooleanValue(Nan::GetCurrentContext()).FromJust();
     obj->nativePlayer->setLoop(loop);
 }
 
