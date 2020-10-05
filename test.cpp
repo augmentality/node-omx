@@ -16,6 +16,7 @@
 // this program; if not, write to the Free Software Foundation, Inc., 51 Franklin
 // Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
+#include <iostream>
 
 #include "libomx/NativePlayer.h"
 
@@ -52,8 +53,15 @@ int main (int argc, char **argv)
     }
     printf("All done"); fflush(stdout);
      */
+
+     if (argc < 2)
+     {
+         std::cerr << "Usage: " << argv[0] << " path/to/test_file.mp4" << std::endl;
+         return 1;
+     }
+
     bool finished = false;
-    NativePlayer * n = new NativePlayer(std::string("/augmentality/storage/entrypoint.mp4"), [&]()
+    NativePlayer * n = new NativePlayer(std::string(argv[1]), [&]()
     {
         printf("Playback Completed\n");fflush(stdout);
         finished = true;
