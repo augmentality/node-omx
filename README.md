@@ -15,7 +15,7 @@ Please check npm -v to make sure you have npm@6.8.0 or higher. The version of np
 For raspbian:
 
 ```bash
-apt-get install build-essential cmake libavutil-dev libavcodec-dev libswresample-dev libavformat-dev
+apt-get install build-essential pkg-config cmake libavutil-dev libavcodec-dev libswresample-dev libavformat-dev libraspberrypi-dev raspberrypi-kernel-headers
 ```
 
 ## Install
