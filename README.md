@@ -132,6 +132,20 @@ async function run()
 run().then({});
 ```
 
+## Testing
+
+The following video can be used for testing; use `wget` to obtain a copy:
+
+    http://distribution.bbb3d.renderfarming.net/video/mp4/bbb_sunflower_1080p_30fps_normal.mp4
+
+Test that `libomx` builds correctly:
+
+    ./build/testApp bbb_sunflower_1080p_30fps_normal.mp4
+
+Test that `nodejs` wrapper library works:
+
+    node test.js bbb_sunflower_1080p_30fps_normal.mp4
+
 ## Caveats
 
 * A read-ahead buffer is implemented to help smooth playback. If you disable looping, the reader may have already looped, in which case playback will end at the end of the next run.
